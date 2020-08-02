@@ -1,17 +1,35 @@
+from typing import Tuple
+
 import gym
 import poliastro
+from astropy.units import Quantity
 from gym import spaces
 from astropy.coordinates import solar_system_ephemeris
-from astropy import time
+from astropy import time, units as u
+from poliastro.bodies import Earth, Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto
 from poliastro.ephem import Ephem
 import numpy as np
+from poliastro.frames import Planes
+from poliastro.twobody.orbit import Orbit
 
 
 class SolarSystem(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, bodies="All", **kwargs):
+    def __init__(self, bodies, time, timestep, target_body, spaceship):
         super(SolarSystem, self).__init__()
+
+        # init:
+        # * which bodies are modelled
+        # * what time it is
+        # * what timestep to use
+        # * target body
+        # * spaceship pos/vel (orbit?) /fuel/thrust
+        # *
+
+        # init must define action & observation space
+        # initialize model solar system
+        #
         # Define action and observation space
         # They must be gym.spaces objects
         self.action_space = spaces.Space()
@@ -25,12 +43,15 @@ class SolarSystem(gym.Env):
         # poliastro.bodies.SolarSystemPlanet =
         #   Sun, Earth, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto
         body_dict = {
-            "Earth": ["Earth", "Moon"],
+            "Earth": [Earth, Moon],
             "All":
-                ["Sun", "Earth", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"],
-            "Inner": ["Sun", "Earth", "Moon", "Mercury", "Venus", "Mars"],
-            "Major": ["Sun", "Earth", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"]
+                [Sun, Earth, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto]
         }
+
+        # observation :
+        # time, craft position, craft velocity, craft fuel, craft engine power, bodies: position, velocity, mass
+        # [time, [craft position, velocity, fuel, engine power], [target body position, velocity, mass],
+        # [other body1 position, vel, mass], [other bodyn position, velocity, mass]]
 
         try:
             body_list = body_dict[bodies]
@@ -74,3 +95,48 @@ class SolarSystem(gym.Env):
         return list_of_bodies
 
 
+class SpaceShip:
+    def __init__(self, *, initial_orbit, mass, delta_v, engine_thrust):
+        self.initial_orbit = None
+        self.mass = None
+        self.velocity = None
+        self.fuel = None
+        self.engine_thrust_max = None
+        self.engine_thrust_min = None
+        self.rv = None  # type: Tuple[Quantity, Quantity]
+
+    @classmethod
+    def get_default_ships(cls, ship_name, altitude, start_time):
+        low_earth_orbit = SpaceShip.from_equatorial_circular_orbit(Earth, altitude * u.km, start_time)
+        ships = {
+            "default_ship":
+                SpaceShip(
+                    initial_orbit=low_earth_orbit, mass=50, delta_v=50, engine_thrust=50
+                ),
+            "high_thrust":
+                SpaceShip(
+                    initial_orbit=low_earth_orbit, mass=50, delta_v=50, engine_thrust=100
+                ),
+            "low_thrust":
+                SpaceShip(
+                    initial_orbit=low_earth_orbit, mass=50, delta_v=50, engine_thrust=5
+                )
+        }
+
+        return ships.get(ship_name)
+
+    @classmethod
+    def from_start_orbit(cls, body, altitude, eccentricity, inclination, raan, argp, nu, epoch, plane):
+        return Orbit.from_classical(body, altitude, eccentricity, inclination, raan, argp, nu, epoch, plane)
+
+    @classmethod
+    def from_equatorial_circular_orbit(cls, body, altitude, start_time):
+        return cls.from_start_orbit(
+            body,
+            altitude,
+            eccentricity=0 * u.one,
+            inclination=0 * u.deg,
+            raan=0 * u.deg,
+            argp=0 * u.deg,
+            nu=0 * u.deg,
+            epoch=start_time)
