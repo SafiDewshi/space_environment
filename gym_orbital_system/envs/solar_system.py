@@ -4,7 +4,7 @@ from typing import Tuple
 import gym
 import poliastro
 from astropy.units import Quantity
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from gym import spaces
 from astropy.coordinates import solar_system_ephemeris
 from astropy import time, units as u
@@ -28,9 +28,9 @@ class SolarSystem(gym.Env):
     def __init__(self,
                  bodies,
                  start_time: Time,
-                 time_step,
                  start_body: SolarSystemPlanet,
                  target_body: SolarSystemPlanet,
+                 time_step: TimeDelta = TimeDelta(1*u.hour),
                  spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
                  spaceship_initial_altitude: float = 400,
                  spaceship_mass: float = None,
@@ -111,7 +111,7 @@ class SolarSystem(gym.Env):
         return observation, reward, done, info
 
     def reset(self):
-        # get planet and spaceship positions at start_time, reset spaceship fuel, 
+        # get planet and spaceship positions at start_time, reset spaceship fuel,
         observation = []
 
         return observation
