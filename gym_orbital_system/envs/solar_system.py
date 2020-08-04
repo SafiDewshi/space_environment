@@ -20,7 +20,7 @@ class SpaceShipName(Enum):
     DEFAULT = "default"
     LOW_THRUST = "high_thrust"
     HIGH_THRUST = "low_thrust"
-    # todo: also add a blank
+    # todo: also add a blank ship?
 
 
 class SolarSystem(gym.Env):
@@ -45,6 +45,7 @@ class SolarSystem(gym.Env):
 
         self.start_time = start_time
         self.time_step = time_step
+        self.done = False
 
         # set up solar system
         solar_system_ephemeris.set("jpl")
@@ -59,6 +60,7 @@ class SolarSystem(gym.Env):
         # poliastro.bodies.SolarSystemPlanet =
         #   Sun, Earth, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto
         # could also add versions for: only inner solar system, only 'major' bodies jovan moons, saturn's moons?
+
         try:
             self.body_list = body_dict[bodies]
         except KeyError:
@@ -80,7 +82,7 @@ class SolarSystem(gym.Env):
         # init:
         # * which bodies are modelled
         # * what time it is
-        # * what timestep to use
+        # * what time_step to use
         # * target body
         # * spaceship pos/vel (orbit?) /fuel/thrust
         # *
@@ -90,17 +92,24 @@ class SolarSystem(gym.Env):
         #
         # Define action and observation space
         # They must be gym.spaces objects
-        self.action_space = spaces.Space()
-        self.observation_space = spaces.Space()
 
-        # todo: get list of celestial bodies, initial spacecraft position, time?
-        # dict: all_planets, earth/moon, inner_planets, w/e
-        # observation :
-        # time, craft position, craft velocity, craft fuel, craft engine power, bodies: position, velocity, mass
-        # [[craft position, velocity, fuel, engine power],
+        # observation ~~time~~, time_step, craft position, craft velocity, craft fuel, craft engine power,
+        # bodies: position, velocity, mass
+
+        # [time_step [craft position, velocity, fuel, engine power],
         # [body_1_is_target, body_1_position, body_1_velocity, body_1_mass],
         # ...
         # [body_n_is_target, body_n_position, body_n_velocity, body_n_mass]]
+        self.observation_space = spaces.Space()
+
+        # action:
+        # tuple [[direction 3-vector], burn duration]
+        # [[x,y,z], throttle]
+        self.action_space = spaces.Tuple((
+            spaces.Box(np.array([-1, -1, -1]), np.array([1, 1, 1])),  # x,y,z direction vector
+            spaces.Box(np.array([0]), np.array([1]))  # burn duration as percent of time_step
+        ))
+        # spaces.Box(np.array([-1, -1, -1, 0]), np.array([1, 1, 1, 1]))  # x,y,z, throttle %time
 
     def step(self, action):
         observation = []
@@ -117,7 +126,7 @@ class SolarSystem(gym.Env):
 
         # todo: take input action in the form thrust direction, thrust percentage, thrust duration?
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
-        # todo: update system ephems for new timestep
+        # todo: update system ephem for new time_step
         # todo: return new observation of craft rv, fuel levels, system positions. Write log of ship & system positions?
         # todo: calculate rewards? other info?
 
