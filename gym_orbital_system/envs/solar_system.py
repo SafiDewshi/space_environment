@@ -67,7 +67,7 @@ class SolarSystem(gym.Env):
             raise KeyError(f"bodies must be one of {body_dict.keys()}")
 
         # set up spacecraft
-        spaceship_initial_altitude = spaceship_initial_altitude * u.km
+        spaceship_initial_altitude = spaceship_initial_altitude
         self.spaceship = SpaceShip.get_default_ships(spaceship_name, spaceship_initial_altitude, start_time, start_body)
         # override defaults if given
         if spaceship_mass is not None:
@@ -103,13 +103,11 @@ class SolarSystem(gym.Env):
         self.observation_space = spaces.Space()
 
         # action:
-        # tuple [[direction 3-vector], burn duration]
-        # [[x,y,z], throttle]
+        # tuple [[x,y,z], burn duration]
         self.action_space = spaces.Tuple((
-            spaces.Box(np.array([-1, -1, -1]), np.array([1, 1, 1])),  # x,y,z direction vector
-            spaces.Box(np.array([0]), np.array([1]))  # burn duration as percent of time_step
+            spaces.Box(low=-1.0, high=1.0, shape=(3,)),  # x,y,z direction vector
+            spaces.Box(low=0.0, high=1.0, shape=(1,))  # burn duration as percent of time_step
         ))
-        # spaces.Box(np.array([-1, -1, -1, 0]), np.array([1, 1, 1, 1]))  # x,y,z, throttle %time
 
     def step(self, action):
         observation = []
@@ -119,10 +117,6 @@ class SolarSystem(gym.Env):
 
         # observation should be a list of bodies including their positions and speeds,
         # as well as the spacecraft's position, speed, and fuel?
-        # observation :
-        # time, craft position, craft velocity, craft fuel, craft engine power, bodies: position, velocity, mass
-        # [time, [craft position, velocity, fuel, engine power], [target body position, velocity, mass],
-        # [other body1 position, vel, mass], [other bodyn position, velocity, mass]]
 
         # todo: take input action in the form thrust direction, thrust percentage, thrust duration?
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
@@ -167,7 +161,7 @@ class SpaceShip:
         self.velocity = delta_v
         self.fuel = None
         self.engine_thrust = engine_thrust
-        self.rv = None  # type: Tuple[Quantity, Quantity]
+        self.rv = self.initial_orbit.rv()  # type: Tuple[Quantity, Quantity]
 
     @classmethod
     def get_default_ships(cls, ship_name: SpaceShipName, altitude, start_time, start_body):
