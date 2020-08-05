@@ -23,11 +23,16 @@ class SpaceShipName(Enum):
     # todo: also add a blank ship?
 
 
+class SystemScope(Enum):
+    EARTH = "Earth"
+    ALL = "All"
+
+
 class SolarSystem(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self,
-                 bodies,
+                 bodies: SystemScope,
                  start_time: Time,
                  start_body: SolarSystemPlanet,
                  target_bodies: List[SolarSystemPlanet],
@@ -52,8 +57,8 @@ class SolarSystem(gym.Env):
         # Download & use JPL Ephem
 
         body_dict = {
-            "Earth": [Earth, Moon],
-            "All":
+            SystemScope.EARTH: [Earth, Moon],
+            SystemScope.ALL:
                 [Sun, Earth, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto]
         }
         # define bodies to model
@@ -123,6 +128,7 @@ class SolarSystem(gym.Env):
         # todo: update system ephem for new time_step
         # todo: return new observation of craft rv, fuel levels, system positions. Write log of ship & system positions?
         # todo: calculate rewards? other info?
+        # todo: record position history
 
         return observation, reward, done, info
 
@@ -131,7 +137,7 @@ class SolarSystem(gym.Env):
 
         self.start_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
 
-        # system_ephems = self._get_ephem_from_list_of_bodies(body_list, time)
+        # system_ephem = self._get_ephem_from_list_of_bodies(body_list, time)
 
         observation = []
 
@@ -145,7 +151,8 @@ class SolarSystem(gym.Env):
 
     # todo: get list of planets and their positions using
 
-    def _get_ephem_from_list_of_bodies(self, bodies, current_time):
+    @staticmethod
+    def _get_ephem_from_list_of_bodies(bodies, current_time):
         list_of_bodies = []
         for i in bodies:
             body = Ephem.from_body(i, current_time)
