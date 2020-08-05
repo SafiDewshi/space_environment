@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 from typing import Tuple, List
 
@@ -31,6 +32,7 @@ class SystemScope(Enum):
 class SolarSystem(gym.Env):
     metadata = {'render.modes': ['human']}
 
+    @u.quantity_input
     def __init__(self,
                  bodies: SystemScope,
                  start_time: Time,
@@ -38,10 +40,10 @@ class SolarSystem(gym.Env):
                  target_bodies: List[SolarSystemPlanet],
                  time_step: TimeDelta = TimeDelta(1 * u.hour),
                  spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
-                 spaceship_initial_altitude: float = 400,
-                 spaceship_mass: float = None,
-                 spaceship_delta_v: float = None,
-                 spaceship_engine_thrust: float = None
+                 spaceship_initial_altitude: u.km = 400 * u.km,
+                 spaceship_mass: u.kg = None,
+                 spaceship_delta_v: u.m/u.s = None,
+                 spaceship_engine_thrust: u.N = None
                  ):
         super(SolarSystem, self).__init__()
 
@@ -51,6 +53,7 @@ class SolarSystem(gym.Env):
         self.start_time = start_time
         self.time_step = time_step
         self.done = False
+
 
         # set up solar system
         solar_system_ephemeris.set("jpl")
@@ -156,7 +159,7 @@ class SolarSystem(gym.Env):
         list_of_bodies = []
         for i in bodies:
             body = Ephem.from_body(i, current_time)
-            list_of_bodies.append(body)
+            list_of_bodies.append([i.name, body])
         return list_of_bodies
 
 
