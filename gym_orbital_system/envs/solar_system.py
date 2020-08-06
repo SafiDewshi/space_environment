@@ -34,10 +34,10 @@ class SolarSystem(gym.Env):
 
     @u.quantity_input
     def __init__(self,
-                 bodies: SystemScope,
-                 start_time: Time,
-                 start_body: SolarSystemPlanet,
-                 target_bodies: List[SolarSystemPlanet],
+                 bodies: SystemScope = SystemScope.ALL,
+                 start_body: SolarSystemPlanet = None,
+                 target_bodies: List[SolarSystemPlanet] = None,
+                 start_time: Time = None,
                  time_step: TimeDelta = TimeDelta(1 * u.hour),
                  spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
                  spaceship_initial_altitude: u.km = 400 * u.km,
@@ -47,13 +47,17 @@ class SolarSystem(gym.Env):
                  ):
         super(SolarSystem, self).__init__()
 
-        if not target_bodies:
-            raise ValueError("Target bodies must be a list of one or more poliastro.bodies.SolarSystemPlanet")
+        if start_body is None:
+            start_body = Earth
+        if target_bodies is None:
+            target_bodies = [Mars]
+        if start_time is None:
+            start_time = Time(datetime.now()).tdb
 
+        self.target_bodies = target_bodies
         self.start_time = start_time
         self.time_step = time_step
         self.done = False
-
 
         # set up solar system
         solar_system_ephemeris.set("jpl")
@@ -85,7 +89,7 @@ class SolarSystem(gym.Env):
         if spaceship_engine_thrust is not None:
             self.spaceship.engine_thrust = spaceship_engine_thrust
 
-        self.start_ephem = None
+        self.current_ephem = None
 
         # init:
         # * which bodies are modelled
@@ -104,7 +108,7 @@ class SolarSystem(gym.Env):
         # observation ~~time~~, time_step, craft position, craft velocity, craft fuel, craft engine power,
         # bodies: position, velocity, mass
 
-        # [time_step [craft position, velocity, fuel, engine power],
+        # [time_step, [craft position, velocity, fuel, engine power],
         # [body_1_is_target, body_1_position, body_1_velocity, body_1_mass],
         # ...
         # [body_n_is_target, body_n_position, body_n_velocity, body_n_mass]]
@@ -126,6 +130,10 @@ class SolarSystem(gym.Env):
         # observation should be a list of bodies including their positions and speeds,
         # as well as the spacecraft's position, speed, and fuel?
 
+        # increment time
+        # self._record_current_state()
+        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
+
         # todo: take input action in the form thrust direction, thrust percentage, thrust duration?
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
         # todo: update system ephem for new time_step
@@ -138,11 +146,13 @@ class SolarSystem(gym.Env):
     def reset(self):
         # get planet and spaceship positions at start_time, reset spaceship fuel,
 
-        self.start_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
+        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
+
+        # todo: convert spaceship rv to system-relative rather than earth
 
         # system_ephem = self._get_ephem_from_list_of_bodies(body_list, time)
 
-        observation = []
+        observation = self._get_observation()
 
         return observation
 
@@ -159,8 +169,30 @@ class SolarSystem(gym.Env):
         list_of_bodies = []
         for i in bodies:
             body = Ephem.from_body(i, current_time)
-            list_of_bodies.append([i.name, body])
+            list_of_bodies.append([i, body])
         return list_of_bodies
+
+    def _get_observation(self):
+        obs = [
+            self.time_step,
+            [self.spaceship.rv[0], self.spaceship.rv[1], self.spaceship.fuel, self.spaceship.engine_thrust]
+        ]
+
+        # [time_step, [craft position, velocity, fuel, engine power],
+        # [body_1_is_target, body_1_position, body_1_velocity, body_1_mass],
+        # ...
+        # [body_n_is_target, body_n_position, body_n_velocity, body_n_mass]]
+        for body in self.current_ephem:
+            obs.append(
+                [body[0] in self.target_bodies, body[0].mass, body[1].rv()[0], body[1].rv()[1]]
+            )
+        return obs
+
+    def _record_current_state(self):
+        # self.current_ephem
+        # self.spaceship
+        # write relevant info to file
+        return
 
 
 class SpaceShip:
