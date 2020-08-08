@@ -19,8 +19,8 @@ from poliastro.twobody.orbit import Orbit
 
 class SpaceShipName(Enum):
     DEFAULT = "default"
-    LOW_THRUST = "high_thrust"
-    HIGH_THRUST = "low_thrust"
+    LOW_THRUST = "low_thrust"
+    HIGH_THRUST = "high_thrust"
     # todo: also add a blank ship?
 
 
@@ -131,7 +131,7 @@ class SolarSystem(gym.Env):
         # as well as the spacecraft's position, speed, and fuel?
 
         # increment time
-        # self._record_current_state()
+        self._record_current_state()
         self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
 
         # todo: take input action in the form thrust direction, thrust percentage, thrust duration?
@@ -139,6 +139,12 @@ class SolarSystem(gym.Env):
         # todo: update system ephem for new time_step
         # todo: return new observation of craft rv, fuel levels, system positions. Write log of ship & system positions?
         # todo: calculate rewards? other info?
+        # to calculate rewards - check current position & velocity are within acceptable bounds of target?
+        # ^ doesn't work for multiple targets.
+        # check rewards over threshold?
+        # check all targets have been visited?
+        # when target is visited to within desired thresholds, mark it as visited.
+        # when all targets are done, set done = True
         # todo: record position history
 
         return observation, reward, done, info
@@ -191,7 +197,7 @@ class SolarSystem(gym.Env):
     def _record_current_state(self):
         # self.current_ephem
         # self.spaceship
-        # write relevant info to file
+        # write relevant info to file?
         return
 
 
@@ -208,6 +214,10 @@ class SpaceShip:
     @classmethod
     def get_default_ships(cls, ship_name: SpaceShipName, altitude, start_time, start_body):
         start_orbit = SpaceShip.from_equatorial_circular_orbit(start_body, altitude, start_time)
+
+        # todo: change to quantities
+        # todo: add total mass, dry mass, propellant mass, find total mass from that
+
         ships = {
             SpaceShipName.DEFAULT:
                 SpaceShip(
