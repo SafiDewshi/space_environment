@@ -42,7 +42,7 @@ class SolarSystem(gym.Env):
                  spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
-                 spaceship_delta_v: u.m/u.s = None,
+                 spaceship_delta_v: u.m / u.s = None,
                  spaceship_engine_thrust: u.N = None
                  ):
         super(SolarSystem, self).__init__()
@@ -54,8 +54,10 @@ class SolarSystem(gym.Env):
         if start_time is None:
             start_time = Time(datetime.now()).tdb
 
+        self.start_body = start_body
         self.target_bodies = target_bodies
         self.start_time = start_time
+        self.current_time = None
         self.time_step = time_step
         self.done = False
 
@@ -80,7 +82,9 @@ class SolarSystem(gym.Env):
 
         # set up spacecraft
         spaceship_initial_altitude = spaceship_initial_altitude
-        self.spaceship = SpaceShip.get_default_ships(spaceship_name, spaceship_initial_altitude, start_time, start_body)
+        self.spaceship = SpaceShip.get_default_ships(
+            spaceship_name, spaceship_initial_altitude, self.start_time, self.start_body
+        )
         # override defaults if given
         if spaceship_mass is not None:
             self.spaceship.mass = spaceship_mass
@@ -132,7 +136,8 @@ class SolarSystem(gym.Env):
 
         # increment time
         self._record_current_state()
-        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
+        self.current_time += self.time_step
+        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
 
         # todo: take input action in the form thrust direction, thrust percentage, thrust duration?
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
@@ -152,11 +157,16 @@ class SolarSystem(gym.Env):
     def reset(self):
         # get planet and spaceship positions at start_time, reset spaceship fuel,
 
+        self.current_time = self.start_time
+
         self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
 
-        # todo: convert spaceship rv to system-relative rather than earth
-
-        # system_ephem = self._get_ephem_from_list_of_bodies(body_list, time)
+        start_body_ephem = Ephem.from_body(self.start_body, self.start_time)
+        self.spaceship.global_rv = (
+            self.spaceship.local_rv[0] + start_body_ephem.rv()[0],
+            self.spaceship.local_rv[1] + start_body_ephem.rv()[1]
+        )
+        # convert spaceship rv to system-relative rather than earth
 
         observation = self._get_observation()
 
@@ -181,9 +191,11 @@ class SolarSystem(gym.Env):
     def _get_observation(self):
         obs = [
             self.time_step,
-            [self.spaceship.rv[0], self.spaceship.rv[1], self.spaceship.fuel, self.spaceship.engine_thrust]
+            [self.spaceship.global_rv[0], self.spaceship.global_rv[1], self.spaceship.fuel,
+             self.spaceship.engine_thrust]
         ]
-
+        # todo: units!
+        # todo: reformat obs into np array
         # [time_step, [craft position, velocity, fuel, engine power],
         # [body_1_is_target, body_1_position, body_1_velocity, body_1_mass],
         # ...
@@ -209,7 +221,8 @@ class SpaceShip:
         self.velocity = delta_v
         self.fuel = None
         self.engine_thrust = engine_thrust
-        self.rv = self.initial_orbit.rv()  # type: Tuple[Quantity, Quantity]
+        self.local_rv = self.initial_orbit.rv()  # type: Tuple[Quantity, Quantity]
+        self.global_rv = (None, None)
 
     @classmethod
     def get_default_ships(cls, ship_name: SpaceShipName, altitude, start_time, start_body):
