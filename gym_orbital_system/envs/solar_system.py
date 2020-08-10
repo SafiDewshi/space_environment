@@ -60,6 +60,8 @@ class SolarSystem(gym.Env):
         self.current_time = None
         self.time_step = time_step
         self.done = False
+        self.reward = 0
+        self.done = False
 
         # set up solar system
         solar_system_ephemeris.set("jpl")
@@ -126,33 +128,37 @@ class SolarSystem(gym.Env):
         ))
 
     def step(self, action):
-        observation = []
-        reward = 0
-        done = 0
         info = []
 
         # observation should be a list of bodies including their positions and speeds,
         # as well as the spacecraft's position, speed, and fuel?
 
-        # increment time
         self._record_current_state()
-        self.current_time += self.time_step
-        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
 
-        # todo: take input action in the form thrust direction, thrust percentage, thrust duration?
+        # todo: take input action in the form thrust direction, thrust time as percentage of time step
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
-        # todo: update system ephem for new time_step
-        # todo: return new observation of craft rv, fuel levels, system positions. Write log of ship & system positions?
+        self.spaceship.calculate_net_force_on_ship()
+        self.spaceship.update_ship_rv()
+
+        self.current_time += self.time_step
+        # increment time
+
+        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
+        # update system ephem for new time_step
+
+        observation = self._get_observation()
+        # return new observation of craft rv, fuel levels, system positions
         # todo: calculate rewards? other info?
         # to calculate rewards - check current position & velocity are within acceptable bounds of target?
         # ^ doesn't work for multiple targets.
         # check rewards over threshold?
         # check all targets have been visited?
+        self._calculate_rewards()
         # when target is visited to within desired thresholds, mark it as visited.
         # when all targets are done, set done = True
-        # todo: record position history
+        self._check_if_done()
 
-        return observation, reward, done, info
+        return observation, self.reward, self.done, info
 
     def reset(self):
         # get planet and spaceship positions at start_time, reset spaceship fuel,
@@ -208,6 +214,21 @@ class SolarSystem(gym.Env):
         # self.current_ephem
         # self.spaceship
         # write relevant info to file?
+
+        # todo: record planet & craft position history
+        return
+
+    def _calculate_rewards(self):
+        # todo: check if craft fulfils reward criteria - close/slow enough to a target body?
+        # if so increment reward and remove is_target boolean
+        if False:
+            self.reward += 1
+        return
+
+    def _check_if_done(self):
+        # todo: check if every target has been visited
+        if False:
+            self.done = True
         return
 
 
@@ -262,3 +283,15 @@ class SpaceShip:
             nu=0 * u.deg,
             epoch=start_time
         )
+
+    def calculate_net_force_on_ship(self):
+        net_force = []
+        # direction and strength of force
+        # F = Gm/r^2
+        # todo: for each body, calculate F vector (including direction)
+        # todo: sum F vectors for each body
+        pass
+
+    def update_ship_rv(self):
+        # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
+        pass
