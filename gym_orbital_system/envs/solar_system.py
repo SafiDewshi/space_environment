@@ -179,9 +179,12 @@ class SolarSystem(gym.Env):
         return observation
 
     def render(self, mode='human'):
+        # todo: plot current coordinates of system?
+        # todo: maybe plot previous coordinates too?
         pass
 
     def close(self):
+        # todo: ?
         pass
 
     @staticmethod
