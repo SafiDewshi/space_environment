@@ -178,8 +178,6 @@ class SolarSystem(gym.Env):
     def close(self):
         pass
 
-    # todo: get list of planets and their positions using
-
     @staticmethod
     def _get_ephem_from_list_of_bodies(bodies, current_time):
         list_of_bodies = []
