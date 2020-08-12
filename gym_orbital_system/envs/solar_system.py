@@ -230,6 +230,7 @@ class SolarSystem(gym.Env):
 
     def _check_if_done(self):
         # todo: check if every target has been visited
+        # if done, adjust reward based off elapsed time and remaining fuel
         if False:
             self.done = True
         return
@@ -237,12 +238,13 @@ class SolarSystem(gym.Env):
 
 class SpaceShip:
 
-    def __init__(self, *, initial_orbit, mass, delta_v, engine_thrust):
+    def __init__(self, *, initial_orbit, dry_mass, propellant_mass, isp, max_thrust):
         self.initial_orbit = initial_orbit
-        self.mass = mass
-        self.velocity = delta_v
-        self.fuel = None
-        self.engine_thrust = engine_thrust
+        self.dry_mass = dry_mass
+        self.propellant_mass = propellant_mass
+        self.total_mass = dry_mass + propellant_mass
+        self.isp = isp
+        self.engine_thrust = max_thrust
         self.local_rv = self.initial_orbit.rv()  # type: Tuple[Quantity, Quantity]
         self.global_rv = (None, None)
 
@@ -256,15 +258,27 @@ class SpaceShip:
         ships = {
             SpaceShipName.DEFAULT:
                 SpaceShip(
-                    initial_orbit=start_orbit, mass=50, delta_v=50, engine_thrust=50
+                    initial_orbit=start_orbit,
+                    dry_mass=6000 * u.kg,
+                    propellant_mass=0 * u.kg,
+                    isp=0 * u.s,
+                    max_thrust=0 * u.N
                 ),
             SpaceShipName.HIGH_THRUST:
                 SpaceShip(
-                    initial_orbit=start_orbit, mass=50, delta_v=50, engine_thrust=100
+                    initial_orbit=start_orbit,
+                    dry_mass=6000 * u.kg,
+                    propellant_mass=0 * u.kg,
+                    isp=0 * u.s,
+                    max_thrust=0 * u.N
                 ),
             SpaceShipName.LOW_THRUST:
                 SpaceShip(
-                    initial_orbit=start_orbit, mass=50, delta_v=50, engine_thrust=5
+                    initial_orbit=start_orbit,
+                    dry_mass=6000 * u.kg,
+                    propellant_mass=0 * u.kg,
+                    isp=0 * u.s,
+                    max_thrust=0 * u.N
                 )
         }
 
