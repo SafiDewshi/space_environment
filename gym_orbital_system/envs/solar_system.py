@@ -224,14 +224,15 @@ class SolarSystem(gym.Env):
     def _calculate_rewards(self):
         # todo: check if craft fulfils reward criteria - close/slow enough to a target body?
         # if so increment reward and remove is_target boolean
-        if False:
+        # support for flybys? maybe is_target goes 0 (no reward) 0.5 (flyby needed), 1 (target/want to orbit)
+        if True:
             self.reward += 1
         return
 
     def _check_if_done(self):
         # todo: check if every target has been visited
         # if done, adjust reward based off elapsed time and remaining fuel
-        if False:
+        if True:
             self.done = True
         return
 
@@ -252,14 +253,13 @@ class SpaceShip:
     def get_default_ships(cls, ship_name: SpaceShipName, altitude, start_time, start_body):
         start_orbit = SpaceShip.from_equatorial_circular_orbit(start_body, altitude, start_time)
 
-        # todo: change to quantities
         # todo: add total mass, dry mass, propellant mass, find total mass from that
 
         ships = {
             SpaceShipName.DEFAULT:
                 SpaceShip(
                     initial_orbit=start_orbit,
-                    dry_mass=6000 * u.kg,
+                    dry_mass=2500 * u.kg,
                     propellant_mass=0 * u.kg,
                     isp=0 * u.s,
                     max_thrust=0 * u.N
