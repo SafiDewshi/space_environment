@@ -9,7 +9,7 @@ from astropy.time import Time, TimeDelta
 from gym import spaces
 from astropy.coordinates import solar_system_ephemeris
 from astropy import time, units as u
-from astropy.constants import G
+from astropy.constants import G, g0
 from poliastro.bodies import Earth, Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, \
     SolarSystemPlanet
 from poliastro.ephem import Ephem
@@ -135,12 +135,12 @@ class SolarSystem(gym.Env):
         # observation should be a list of bodies including their positions and speeds,
         # as well as the spacecraft's position, speed, and fuel?
 
-        self._record_current_state()
-
         # todo: take input action in the form thrust direction, thrust time as percentage of time step
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
-        self.calculate_net_force_on_ship()
-        self.update_ship_rv()
+        gravitational_force = self._calculate_gravitational_force_on_ship()
+        thrust = self._calculate_engine_force(action)
+
+        self.update_ship()
 
         self.current_time += self.time_step
         # increment time
@@ -149,6 +149,9 @@ class SolarSystem(gym.Env):
         # update system ephem for new time_step
 
         observation = self._get_observation()
+
+        self._record_current_state()
+
         # return new observation of craft rv, fuel levels, system positions
         # todo: calculate rewards? other info?
         # to calculate rewards - check current position & velocity are within acceptable bounds of target?
@@ -203,8 +206,8 @@ class SolarSystem(gym.Env):
             [self.spaceship.global_rv[0], self.spaceship.global_rv[1], self.spaceship.propellant_mass,
              self.spaceship.engine_thrust]
         ]
-        # todo: units!
-        # todo: reformat obs into np array
+        # todo: rework with units!
+        # todo: reformat obs into np array, need better shape
         # [time_step, [craft position, velocity, fuel, engine power],
         # [body_1_is_target, body_1_position, body_1_velocity, body_1_mass],
         # ...
@@ -220,7 +223,7 @@ class SolarSystem(gym.Env):
         # self.spaceship
         # write relevant info to file?
 
-        # todo: record planet & craft position history
+        # todo: record planet & craft position history for later use/plotting
         return
 
     def _calculate_rewards(self):
@@ -238,12 +241,10 @@ class SolarSystem(gym.Env):
             self.done = True
         return
 
-    def calculate_net_force_on_ship(self):
+    def _calculate_gravitational_force_on_ship(self):
         # direction and strength of force
         # F = Gm/r^2
-
         forces = []
-
         for body in self.current_ephem:
             r_vector = body[1].rv()[0] - self.spaceship.global_rv[0]
             r_magnitude = np.linalg.norm(r_vector)
@@ -257,10 +258,24 @@ class SolarSystem(gym.Env):
         for f in forces:
             total_force += f
 
-        pass
+        return total_force
 
-    def update_ship_rv(self):
+    def _calculate_engine_force(self, action):
+        direction, thrust_percent = action
+        thrust_time = self.time_step / thrust_percent
+        exhaust_velocity = self.spaceship.isp * g0
+        mass_start = self.spaceship.total_mass
+        mass_flow_rate = self.spaceship.engine_thrust / exhaust_velocity
+        delta_m = mass_flow_rate * thrust_time
+        mass_final = mass_start - delta_m
+        delta_v = exhaust_velocity * np.log((mass_start / mass_final))
+
+        return delta_v*direction
+
+    def update_ship(self):
         # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
+        # todo: deduct fuel consumption and update ship weight
+
         pass
 
 
@@ -270,17 +285,22 @@ class SpaceShip:
         self.initial_orbit = initial_orbit
         self.dry_mass = dry_mass
         self.propellant_mass = propellant_mass
-        self.total_mass = dry_mass + propellant_mass
         self.isp = isp
         self.engine_thrust = max_thrust
         self.local_rv = self.initial_orbit.rv()  # type: Tuple[Quantity, Quantity]
         self.global_rv = (None, None)
 
+    @property
+    def total_mass(self):
+        return self.dry_mass+self.propellant_mass
+
+    @total_mass.setter
+    def total_mass(self, total_mass):
+        self.propellant_mass = total_mass - self.dry_mass
+
     @classmethod
     def get_default_ships(cls, ship_name: SpaceShipName, altitude, start_time, start_body):
         start_orbit = SpaceShip.from_equatorial_circular_orbit(start_body, altitude, start_time)
-
-        # todo: add total mass, dry mass, propellant mass, find total mass from that
 
         ships = {
             SpaceShipName.DEFAULT:
