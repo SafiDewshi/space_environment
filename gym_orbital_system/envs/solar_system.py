@@ -19,8 +19,8 @@ from poliastro.twobody.orbit import Orbit
 
 
 class SpaceShipName(Enum):
-    DEFAULT = "default"
-    LOW_THRUST = "low_thrust"
+    DEFAULT = "default, approximately Cassini-Huygens with increased dV (4600) to compensate for lack of 3rd stage"
+    LOW_THRUST = "low_thrust, approximately Deep Space 1 with ~6500 m/s dV"
     HIGH_THRUST = "high_thrust"
     # todo: also add a blank ship?
 
@@ -287,25 +287,28 @@ class SpaceShip:
                 SpaceShip(
                     initial_orbit=start_orbit,
                     dry_mass=2500 * u.kg,
-                    propellant_mass=0 * u.kg,
-                    isp=0 * u.s,
-                    max_thrust=0 * u.N
+                    propellant_mass=10000 * u.kg,
+                    # propellant mass is significantly increased to compensate for third stage
+                    isp=300 * u.s,
+                    max_thrust=500 * u.N
+                    # approx dV = 4600
                 ),
             SpaceShipName.HIGH_THRUST:
                 SpaceShip(
                     initial_orbit=start_orbit,
-                    dry_mass=6000 * u.kg,
-                    propellant_mass=0 * u.kg,
-                    isp=0 * u.s,
-                    max_thrust=0 * u.N
+                    dry_mass=2500 * u.kg,
+                    propellant_mass=10000 * u.kg,
+                    isp=300 * u.s,
+                    max_thrust=10000 * u.N
                 ),
             SpaceShipName.LOW_THRUST:
                 SpaceShip(
                     initial_orbit=start_orbit,
-                    dry_mass=6000 * u.kg,
-                    propellant_mass=0 * u.kg,
-                    isp=0 * u.s,
-                    max_thrust=0 * u.N
+                    dry_mass=400 * u.kg,
+                    propellant_mass=100 * u.kg,
+                    isp=3000 * u.s,
+                    max_thrust=0.1 * u.N
+                    # approx dV = 6500
                 )
         }
 
