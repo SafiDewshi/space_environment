@@ -9,6 +9,7 @@ from astropy.time import Time, TimeDelta
 from gym import spaces
 from astropy.coordinates import solar_system_ephemeris
 from astropy import time, units as u
+from astropy.constants import G
 from poliastro.bodies import Earth, Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, \
     SolarSystemPlanet
 from poliastro.ephem import Ephem
@@ -27,6 +28,7 @@ class SpaceShipName(Enum):
 class SystemScope(Enum):
     EARTH = "Earth"
     ALL = "All"
+    # add more systems?
 
 
 class SolarSystem(gym.Env):
@@ -137,8 +139,8 @@ class SolarSystem(gym.Env):
 
         # todo: take input action in the form thrust direction, thrust time as percentage of time step
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
-        self.spaceship.calculate_net_force_on_ship()
-        self.spaceship.update_ship_rv()
+        self.calculate_net_force_on_ship()
+        self.update_ship_rv()
 
         self.current_time += self.time_step
         # increment time
@@ -198,7 +200,7 @@ class SolarSystem(gym.Env):
     def _get_observation(self):
         obs = [
             self.time_step,
-            [self.spaceship.global_rv[0], self.spaceship.global_rv[1], self.spaceship.fuel,
+            [self.spaceship.global_rv[0], self.spaceship.global_rv[1], self.spaceship.propellant_mass,
              self.spaceship.engine_thrust]
         ]
         # todo: units!
@@ -235,6 +237,31 @@ class SolarSystem(gym.Env):
         if True:
             self.done = True
         return
+
+    def calculate_net_force_on_ship(self):
+        # direction and strength of force
+        # F = Gm/r^2
+
+        forces = []
+
+        for body in self.current_ephem:
+            r_vector = body[1].rv()[0] - self.spaceship.global_rv[0]
+            r_magnitude = np.linalg.norm(r_vector)
+            m = body[0].mass * self.spaceship.total_mass
+
+            f_magnitude = (G.to("km3/kg s2") * m) / (r_magnitude ** 2)
+            f_vector = f_magnitude * r_vector / r_magnitude
+            forces.append(f_vector)
+
+        total_force = 0
+        for f in forces:
+            total_force += f
+
+        pass
+
+    def update_ship_rv(self):
+        # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
+        pass
 
 
 class SpaceShip:
@@ -300,15 +327,3 @@ class SpaceShip:
             nu=0 * u.deg,
             epoch=start_time
         )
-
-    def calculate_net_force_on_ship(self):
-        net_force = []
-        # direction and strength of force
-        # F = Gm/r^2
-        # todo: for each body, calculate F vector (including direction)
-        # todo: sum F vectors for each body
-        pass
-
-    def update_ship_rv(self):
-        # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
-        pass
