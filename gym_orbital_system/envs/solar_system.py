@@ -140,7 +140,7 @@ class SolarSystem(gym.Env):
         gravitational_force = self._calculate_gravitational_force_on_ship()
         thrust = self._calculate_engine_force(action)
 
-        self.update_ship()
+        self._update_ship_vector()
 
         self.current_time += self.time_step
         # increment time
@@ -264,18 +264,17 @@ class SolarSystem(gym.Env):
         direction, thrust_percent = action
         thrust_time = self.time_step / thrust_percent
         exhaust_velocity = self.spaceship.isp * g0
-        mass_start = self.spaceship.total_mass
         mass_flow_rate = self.spaceship.engine_thrust / exhaust_velocity
         delta_m = mass_flow_rate * thrust_time
+        mass_start = self.spaceship.total_mass
         mass_final = mass_start - delta_m
         delta_v = exhaust_velocity * np.log((mass_start / mass_final))
+        self.spaceship.total_mass = mass_final
 
         return delta_v*direction
 
-    def update_ship(self):
+    def _update_ship_vector(self):
         # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
-        # todo: deduct fuel consumption and update ship weight
-
         pass
 
 
@@ -319,7 +318,7 @@ class SpaceShip:
                     dry_mass=2500 * u.kg,
                     propellant_mass=10000 * u.kg,
                     isp=300 * u.s,
-                    max_thrust=10000 * u.N
+                    max_thrust=5000 * u.N
                 ),
             SpaceShipName.LOW_THRUST:
                 SpaceShip(
