@@ -44,7 +44,8 @@ class SolarSystem(gym.Env):
                  spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
-                 spaceship_delta_v: u.m / u.s = None,
+                 spaceship_propellant_mass: u.kg = None,
+                 spaceship_isp: u.s = None,
                  spaceship_engine_thrust: u.N = None
                  ):
         super(SolarSystem, self).__init__()
@@ -92,10 +93,12 @@ class SolarSystem(gym.Env):
         # override defaults if given
         if spaceship_mass is not None:
             self.spaceship.mass = spaceship_mass
-        if spaceship_delta_v is not None:
-            self.spaceship.fuel = spaceship_delta_v
+        if spaceship_propellant_mass is not None:
+            self.spaceship.propellant_mass = spaceship_propellant_mass
+        if spaceship_isp is not None:
+            self.spaceship.isp = spaceship_isp
         if spaceship_engine_thrust is not None:
-            self.spaceship.engine_thrust = spaceship_engine_thrust
+            self.spaceship.thrust = spaceship_engine_thrust
 
         self.current_ephem = None
 
@@ -137,10 +140,9 @@ class SolarSystem(gym.Env):
 
         # todo: take input action in the form thrust direction, thrust time as percentage of time step
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
-        gravitational_force = self._calculate_gravitational_force_on_ship()
-        thrust = self._calculate_engine_force(action)
+        total_force = self._calculate_gravitational_force_on_ship() + self._calculate_engine_force(action)
 
-        self._update_ship_vector()
+        self._update_ship_vector(total_force)
 
         self.current_time += self.time_step
         # increment time
@@ -204,7 +206,7 @@ class SolarSystem(gym.Env):
         obs = [
             self.time_step,
             [self.spaceship.global_rv[0], self.spaceship.global_rv[1], self.spaceship.propellant_mass,
-             self.spaceship.engine_thrust]
+             self.spaceship.thrust]
         ]
         # todo: rework with units!
         # todo: reformat obs into np array, need better shape
@@ -264,7 +266,7 @@ class SolarSystem(gym.Env):
         direction, thrust_percent = action
         thrust_time = self.time_step / thrust_percent
         exhaust_velocity = self.spaceship.isp * g0
-        mass_flow_rate = self.spaceship.engine_thrust / exhaust_velocity
+        mass_flow_rate = self.spaceship.thrust / exhaust_velocity
         delta_m = mass_flow_rate * thrust_time
         mass_start = self.spaceship.total_mass
         mass_final = mass_start - delta_m
@@ -273,19 +275,22 @@ class SolarSystem(gym.Env):
 
         return delta_v*direction
 
-    def _update_ship_vector(self):
+    def _update_ship_vector(self, force):
+        # F = ma
+        # a = F/m
+        # devolve force into direction and magnitude
         # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
         pass
 
 
 class SpaceShip:
 
-    def __init__(self, *, initial_orbit, dry_mass, propellant_mass, isp, max_thrust):
+    def __init__(self, *, initial_orbit, dry_mass, propellant_mass, isp, thrust):
         self.initial_orbit = initial_orbit
         self.dry_mass = dry_mass
         self.propellant_mass = propellant_mass
         self.isp = isp
-        self.engine_thrust = max_thrust
+        self.thrust = thrust
         self.local_rv = self.initial_orbit.rv()  # type: Tuple[Quantity, Quantity]
         self.global_rv = (None, None)
 
@@ -309,7 +314,7 @@ class SpaceShip:
                     propellant_mass=10000 * u.kg,
                     # propellant mass is significantly increased to compensate for third stage
                     isp=300 * u.s,
-                    max_thrust=500 * u.N
+                    thrust=500 * u.N
                     # approx dV = 4600
                 ),
             SpaceShipName.HIGH_THRUST:
@@ -318,7 +323,7 @@ class SpaceShip:
                     dry_mass=2500 * u.kg,
                     propellant_mass=10000 * u.kg,
                     isp=300 * u.s,
-                    max_thrust=5000 * u.N
+                    thrust=5000 * u.N
                 ),
             SpaceShipName.LOW_THRUST:
                 SpaceShip(
@@ -326,7 +331,7 @@ class SpaceShip:
                     dry_mass=400 * u.kg,
                     propellant_mass=100 * u.kg,
                     isp=3000 * u.s,
-                    max_thrust=0.1 * u.N
+                    thrust=0.1 * u.N
                     # approx dV = 6500
                 )
         }
