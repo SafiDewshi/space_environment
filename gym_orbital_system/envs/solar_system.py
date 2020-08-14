@@ -140,9 +140,9 @@ class SolarSystem(gym.Env):
 
         # todo: take input action in the form thrust direction, thrust time as percentage of time step
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
-        total_force = self._calculate_gravitational_force_on_ship() + self._calculate_engine_force(action)
+        engine_burn = self._calculate_engine_force(action)
 
-        self._update_ship_vector(total_force)
+        self._update_ship_vector(engine_burn)
 
         self.current_time += self.time_step
         # increment time
@@ -276,9 +276,18 @@ class SolarSystem(gym.Env):
         return delta_v*direction
 
     def _update_ship_vector(self, force):
+        force_magnitude = np.linalg.norm(force)
+        force_direction = force/force_magnitude
+
+        temp = self.time_step
+
+        ship_position = self.spaceship.global_rv[0]
+        ship_velocity = self.spaceship.global_rv[1]
+        gravitational_force = self._calculate_gravitational_force_on_ship()
+        # devolve force into direction and magnitude
         # F = ma
         # a = F/m
-        # devolve force into direction and magnitude
+
         # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
         pass
 
