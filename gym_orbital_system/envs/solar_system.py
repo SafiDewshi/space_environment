@@ -231,7 +231,9 @@ class SolarSystem(gym.Env):
     def _calculate_rewards(self):
         # todo: check if craft fulfils reward criteria - close/slow enough to a target body?
         # if so increment reward and remove is_target boolean
-        # support for flybys? maybe is_target goes 0 (no reward) 0.5 (flyby needed), 1 (target/want to orbit)
+        # support for flybys? assign rewards for any flybys? careful if the system learns to just flyby one body?
+        # negative score for each time step to encourage reaching end.
+
         if True:
             self.reward += 1
         return
@@ -273,11 +275,14 @@ class SolarSystem(gym.Env):
         delta_v = exhaust_velocity * np.log((mass_start / mass_final))
         self.spaceship.total_mass = mass_final
 
-        return delta_v*direction
+        return delta_v * direction
 
     def _update_ship_vector(self, force):
         force_magnitude = np.linalg.norm(force)
-        force_direction = force/force_magnitude
+        force_direction = force / force_magnitude
+
+        # todo: update ship position in smaller time steps than self.timestep
+        #  since an orbit might take 90m but self.timestep defaults to 60m
 
         temp = self.time_step
 
@@ -305,7 +310,7 @@ class SpaceShip:
 
     @property
     def total_mass(self):
-        return self.dry_mass+self.propellant_mass
+        return self.dry_mass + self.propellant_mass
 
     @total_mass.setter
     def total_mass(self, total_mass):
