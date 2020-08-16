@@ -40,7 +40,8 @@ class SolarSystem(gym.Env):
                  start_body: SolarSystemPlanet = None,
                  target_bodies: List[SolarSystemPlanet] = None,
                  start_time: Time = None,
-                 time_step: TimeDelta = TimeDelta(1 * u.hour),
+                 action_step: TimeDelta = TimeDelta(1 * u.hour),
+                 simulation_step: TimeDelta = TimeDelta(1 * u.minute),
                  spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
@@ -61,7 +62,7 @@ class SolarSystem(gym.Env):
         self.target_bodies = target_bodies
         self.start_time = start_time
         self.current_time = None
-        self.time_step = time_step
+        self.time_step = action_step
         self.done = False
         self.reward = 0
         self.done = False
@@ -284,11 +285,13 @@ class SolarSystem(gym.Env):
         # todo: update ship position in smaller time steps than self.timestep
         #  since an orbit might take 90m but self.timestep defaults to 60m
 
-        temp = self.time_step
-
-        ship_position = self.spaceship.global_rv[0]
-        ship_velocity = self.spaceship.global_rv[1]
-        gravitational_force = self._calculate_gravitational_force_on_ship()
+        n_iter = self.time_step / TimeDelta(1 * u.minute)
+        eng_individual_impulse = force_magnitude / n_iter
+        for x in range(0, n_iter):
+            ship_position = self.spaceship.global_rv[0]
+            ship_velocity = self.spaceship.global_rv[1]
+            gravitational_force = self._calculate_gravitational_force_on_ship()
+            # todo: apply G force & engine to ship pos/vel
         # devolve force into direction and magnitude
         # F = ma
         # a = F/m
