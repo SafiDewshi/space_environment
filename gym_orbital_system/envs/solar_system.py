@@ -141,9 +141,8 @@ class SolarSystem(gym.Env):
 
         # todo: take input action in the form thrust direction, thrust time as percentage of time step
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
-        engine_burn = self._calculate_engine_force(action)
 
-        self._update_ship_vector(engine_burn)
+        self._update_ship_dynamics(action)
 
         self.current_time += self.time_step
         # increment time
@@ -177,8 +176,8 @@ class SolarSystem(gym.Env):
 
         start_body_ephem = Ephem.from_body(self.start_body, self.start_time)
         self.spaceship.global_rv = (
-            self.spaceship.local_rv[0] + start_body_ephem.rv()[0],
-            self.spaceship.local_rv[1] + start_body_ephem.rv()[1]
+            self.spaceship.rv[0] + start_body_ephem.rv()[0],
+            self.spaceship.rv[1] + start_body_ephem.rv()[1]
         )
         # convert spaceship rv to system-relative rather than earth
 
@@ -206,7 +205,7 @@ class SolarSystem(gym.Env):
     def _get_observation(self):
         obs = [
             self.time_step,
-            [self.spaceship.global_rv[0], self.spaceship.global_rv[1], self.spaceship.propellant_mass,
+            [self.spaceship.rv[0], self.spaceship.rv[1], self.spaceship.propellant_mass,
              self.spaceship.thrust]
         ]
         # todo: rework with units!
@@ -246,24 +245,23 @@ class SolarSystem(gym.Env):
             self.done = True
         return
 
-    def _calculate_gravitational_force_on_ship(self):
+    def _calculate_gravitational_acceleration(self):
         # direction and strength of force
         # F = Gm/r^2
-        forces = []
+        acceleration = []
         for body in self.current_ephem:
-            r_vector = body[1].rv()[0] - self.spaceship.global_rv[0]
+            r_vector = body[1].rv()[0] - self.spaceship.rv[0]
             r_magnitude = np.linalg.norm(r_vector)
-            m = body[0].mass * self.spaceship.total_mass
 
-            f_magnitude = (G.to("km3/kg s2") * m) / (r_magnitude ** 2)
-            f_vector = f_magnitude * r_vector / r_magnitude
-            forces.append(f_vector)
+            a_magnitude = (G.to("km3/kg s2") * body[0].mass) / (r_magnitude ** 2)
+            a_vector = a_magnitude * r_vector / r_magnitude
+            acceleration.append(a_vector)
 
-        total_force = 0
-        for f in forces:
-            total_force += f
+        total_acceleration = 0
+        for f in acceleration:
+            total_acceleration += f
 
-        return total_force
+        return total_acceleration
 
     def _calculate_engine_force(self, action):
         direction, thrust_percent = action
@@ -278,7 +276,10 @@ class SolarSystem(gym.Env):
 
         return delta_v * direction
 
-    def _update_ship_vector(self, force):
+    def _update_ship_dynamics(self, action):
+
+        force = self._calculate_engine_force(action)
+        direction, thrust_percent = action
         force_magnitude = np.linalg.norm(force)
         force_direction = force / force_magnitude
 
@@ -288,9 +289,9 @@ class SolarSystem(gym.Env):
         n_iter = self.time_step / TimeDelta(1 * u.minute)
         eng_individual_impulse = force_magnitude / n_iter
         for x in range(0, n_iter):
-            ship_position = self.spaceship.global_rv[0]
-            ship_velocity = self.spaceship.global_rv[1]
-            gravitational_force = self._calculate_gravitational_force_on_ship()
+            ship_position = self.spaceship.rv[0]
+            ship_velocity = self.spaceship.rv[1]
+            gravitational_acceleration = self._calculate_gravitational_acceleration()
             # todo: apply G force & engine to ship pos/vel
         # devolve force into direction and magnitude
         # F = ma
@@ -308,8 +309,7 @@ class SpaceShip:
         self.propellant_mass = propellant_mass
         self.isp = isp
         self.thrust = thrust
-        self.local_rv = self.initial_orbit.rv()  # type: Tuple[Quantity, Quantity]
-        self.global_rv = (None, None)
+        self.rv = self.initial_orbit.rv()  # type: Tuple[Quantity, Quantity]
 
     @property
     def total_mass(self):
