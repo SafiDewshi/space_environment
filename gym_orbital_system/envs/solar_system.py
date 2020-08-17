@@ -58,6 +58,8 @@ class SolarSystem(gym.Env):
         if start_time is None:
             start_time = Time(datetime.now()).tdb
 
+        # todo: enforce action_step/simulation_step is an integer?
+
         self.start_body = start_body
         self.target_bodies = target_bodies
         self.start_time = start_time
@@ -258,12 +260,12 @@ class SolarSystem(gym.Env):
             acceleration.append(a_vector)
 
         total_acceleration = 0
-        for f in acceleration:
-            total_acceleration += f
+        for a in acceleration:
+            total_acceleration += a
 
         return total_acceleration
 
-    def _calculate_engine_force(self, action):
+    def _calculate_engine_delta_v(self, action):
         direction, thrust_percent = action
         thrust_time = self.time_step / thrust_percent
         exhaust_velocity = self.spaceship.isp * g0
@@ -278,25 +280,21 @@ class SolarSystem(gym.Env):
 
     def _update_ship_dynamics(self, action):
 
-        force = self._calculate_engine_force(action)
+        delta_v = self._calculate_engine_delta_v(action)
         direction, thrust_percent = action
-        force_magnitude = np.linalg.norm(force)
-        force_direction = force / force_magnitude
+        delta_v_magnitude = np.linalg.norm(delta_v)
+        delta_v_direction = delta_v / delta_v_magnitude
 
         # todo: update ship position in smaller time steps than self.timestep
         #  since an orbit might take 90m but self.timestep defaults to 60m
 
         n_iter = self.time_step / TimeDelta(1 * u.minute)
-        eng_individual_impulse = force_magnitude / n_iter
+        eng_individual_impulse = delta_v_magnitude / n_iter
         for x in range(0, n_iter):
             ship_position = self.spaceship.rv[0]
             ship_velocity = self.spaceship.rv[1]
             gravitational_acceleration = self._calculate_gravitational_acceleration()
             # todo: apply G force & engine to ship pos/vel
-        # devolve force into direction and magnitude
-        # F = ma
-        # a = F/m
-
         # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
         pass
 
