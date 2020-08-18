@@ -65,6 +65,7 @@ class SolarSystem(gym.Env):
         self.start_time = start_time
         self.current_time = None
         self.time_step = action_step
+        self.simulation_step = simulation_step
         self.done = False
         self.reward = 0
         self.done = False
@@ -247,6 +248,42 @@ class SolarSystem(gym.Env):
             self.done = True
         return
 
+    def _update_ship_dynamics(self, action):
+
+        # todo: update ship position in smaller time steps than self.timestep
+        #  since an orbit might take 90m but self.timestep defaults to 60m
+
+        n_iter = self.time_step / TimeDelta(1 * u.minute)
+        ship_position, ship_velocity = self.spaceship.rv
+        for x in range(0, n_iter):
+            grav_acc = self._calculate_gravitational_acceleration()
+            dv, direction = self._calculate_engine_delta_v(action)
+            ship_position = self._update_position(ship_position, ship_velocity, grav_acc, dv)
+            ship_velocity = self._update_velocity(ship_velocity, grav_acc, dv)
+            # todo: apply G force & engine to ship pos/vel
+        # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
+        pass
+
+    def _update_position(self, position, velocity, grav_acc, delta_v):
+        return position + (velocity + 0.5 * grav_acc * self.simulation_step + 0.5 * delta_v) * self.simulation_step
+
+    def _update_velocity(self, velocity, grav_acc, delta_v):
+        return velocity + delta_v + grav_acc * self.simulation_step
+
+    def _calculate_engine_delta_v(self, action):
+        direction, thrust_percent = action
+        direction = direction / np.linalg.norm(direction)
+        thrust_time = self.simulation_step / thrust_percent
+        exhaust_velocity = self.spaceship.isp * g0
+        mass_flow_rate = self.spaceship.thrust / exhaust_velocity
+        delta_m = mass_flow_rate * thrust_time
+        mass_start = self.spaceship.total_mass
+        mass_final = mass_start - delta_m
+        delta_v = exhaust_velocity * np.log((mass_start / mass_final))
+        self.spaceship.total_mass = mass_final
+
+        return delta_v, direction
+
     def _calculate_gravitational_acceleration(self):
         # direction and strength of force
         # F = Gm/r^2
@@ -264,39 +301,6 @@ class SolarSystem(gym.Env):
             total_acceleration += a
 
         return total_acceleration
-
-    def _calculate_engine_delta_v(self, action):
-        direction, thrust_percent = action
-        thrust_time = self.time_step / thrust_percent
-        exhaust_velocity = self.spaceship.isp * g0
-        mass_flow_rate = self.spaceship.thrust / exhaust_velocity
-        delta_m = mass_flow_rate * thrust_time
-        mass_start = self.spaceship.total_mass
-        mass_final = mass_start - delta_m
-        delta_v = exhaust_velocity * np.log((mass_start / mass_final))
-        self.spaceship.total_mass = mass_final
-
-        return delta_v * direction
-
-    def _update_ship_dynamics(self, action):
-
-        delta_v = self._calculate_engine_delta_v(action)
-        direction, thrust_percent = action
-        delta_v_magnitude = np.linalg.norm(delta_v)
-        delta_v_direction = delta_v / delta_v_magnitude
-
-        # todo: update ship position in smaller time steps than self.timestep
-        #  since an orbit might take 90m but self.timestep defaults to 60m
-
-        n_iter = self.time_step / TimeDelta(1 * u.minute)
-        eng_individual_impulse = delta_v_magnitude / n_iter
-        for x in range(0, n_iter):
-            ship_position = self.spaceship.rv[0]
-            ship_velocity = self.spaceship.rv[1]
-            gravitational_acceleration = self._calculate_gravitational_acceleration()
-            # todo: apply G force & engine to ship pos/vel
-        # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
-        pass
 
 
 class SpaceShip:
