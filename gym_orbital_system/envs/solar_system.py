@@ -147,12 +147,6 @@ class SolarSystem(gym.Env):
 
         self._update_ship_dynamics(action)
 
-        self.current_time += self.time_step
-        # increment time
-
-        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
-        # update system ephem for new time_step
-
         observation = self._get_observation()
 
         self._record_current_state()
@@ -178,7 +172,7 @@ class SolarSystem(gym.Env):
         self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
 
         start_body_ephem = Ephem.from_body(self.start_body, self.start_time)
-        self.spaceship.global_rv = (
+        self.spaceship.rv = (
             self.spaceship.rv[0] + start_body_ephem.rv()[0],
             self.spaceship.rv[1] + start_body_ephem.rv()[1]
         )
@@ -253,15 +247,20 @@ class SolarSystem(gym.Env):
         # todo: update ship position in smaller time steps than self.timestep
         #  since an orbit might take 90m but self.timestep defaults to 60m
 
-        n_iter = self.time_step / TimeDelta(1 * u.minute)
+        n_iter = int(np.ceil((self.time_step / self.simulation_step).value))
         ship_position, ship_velocity = self.spaceship.rv
         for x in range(0, n_iter):
             grav_acc = self._calculate_gravitational_acceleration()
             dv, direction = self._calculate_engine_delta_v(action)
-            ship_position = self._update_position(ship_position, ship_velocity, grav_acc, dv)
-            ship_velocity = self._update_velocity(ship_velocity, grav_acc, dv)
-            # todo: apply G force & engine to ship pos/vel
-        # todo: take ship position, velocity, thrust, net_force and update ship position/velocity
+            dv_vector = dv * direction
+            ship_position = self._update_position(ship_position, ship_velocity, grav_acc, dv_vector)
+            ship_velocity = self._update_velocity(ship_velocity, grav_acc, dv_vector)
+            self.current_time += self.simulation_step
+            # increment time
+            self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
+            # update system ephem for new time_step
+            # todo: get next 30min of ephem at once
+
         pass
 
     def _update_position(self, position, velocity, grav_acc, delta_v):
