@@ -62,6 +62,7 @@ class SolarSystem(gym.Env):
 
         self.start_body = start_body
         self.target_bodies = target_bodies
+        self.spaceship_initial_altitude = spaceship_initial_altitude
         self.start_time = start_time
         self.current_time = None
         self.time_step = action_step
@@ -69,6 +70,12 @@ class SolarSystem(gym.Env):
         self.done = False
         self.reward = 0
         self.done = False
+
+        self.spaceship_name = spaceship_name
+        self.spaceship_mass = spaceship_mass
+        self.spaceship_propellant_mass = spaceship_propellant_mass
+        self.spaceship_isp = spaceship_isp
+        self.spaceship_engine_thrust = spaceship_engine_thrust
 
         # set up solar system
         solar_system_ephemeris.set("jpl")
@@ -90,19 +97,8 @@ class SolarSystem(gym.Env):
             raise KeyError(f"bodies must be one of {body_dict.keys()}")
 
         # set up spacecraft
-        spaceship_initial_altitude = spaceship_initial_altitude
-        self.spaceship = SpaceShip.get_default_ships(
-            spaceship_name, spaceship_initial_altitude, self.start_time, self.start_body
-        )
-        # override defaults if given
-        if spaceship_mass is not None:
-            self.spaceship.mass = spaceship_mass
-        if spaceship_propellant_mass is not None:
-            self.spaceship.propellant_mass = spaceship_propellant_mass
-        if spaceship_isp is not None:
-            self.spaceship.isp = spaceship_isp
-        if spaceship_engine_thrust is not None:
-            self.spaceship.thrust = spaceship_engine_thrust
+
+        self.spaceship = self._init_spaceship()
 
         self.current_ephem = None
 
@@ -171,6 +167,9 @@ class SolarSystem(gym.Env):
 
         self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
 
+        # set up spacecraft
+        self.spaceship = self._init_spaceship()
+
         start_body_ephem = Ephem.from_body(self.start_body, self.start_time)
         self.spaceship.rv = (
             self.spaceship.rv[0] + start_body_ephem.rv()[0],
@@ -181,6 +180,21 @@ class SolarSystem(gym.Env):
         observation = self._get_observation()
 
         return observation
+
+    def _init_spaceship(self) -> 'SpaceShip':
+        spaceship = SpaceShip.get_default_ships(
+            self.spaceship_name, self.spaceship_initial_altitude, self.start_time, self.start_body
+        )
+        # override defaults if given
+        if self.spaceship_mass is not None:
+            spaceship.mass = self.spaceship_mass
+        if self.spaceship_propellant_mass is not None:
+            spaceship.propellant_mass = self.spaceship_propellant_mass
+        if self.spaceship_isp is not None:
+            spaceship.isp = self.spaceship_isp
+        if self.spaceship_engine_thrust is not None:
+            spaceship.thrust = self.spaceship_engine_thrust
+        return spaceship
 
     def render(self, mode='human'):
         # todo: plot current coordinates of system?
@@ -272,7 +286,10 @@ class SolarSystem(gym.Env):
     def _calculate_engine_delta_v(self, action):
         direction, thrust_percent = action
         direction = direction / np.linalg.norm(direction)
-        thrust_time = self.simulation_step / thrust_percent
+        if thrust_percent != 0:
+            thrust_time = self.simulation_step / thrust_percent
+        else:
+            thrust_time = 0.
         exhaust_velocity = self.spaceship.isp * g0
         mass_flow_rate = self.spaceship.thrust / exhaust_velocity
         delta_m = mass_flow_rate * thrust_time
