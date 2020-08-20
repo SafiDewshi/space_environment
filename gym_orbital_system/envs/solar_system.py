@@ -40,8 +40,8 @@ class SolarSystem(gym.Env):
                  start_body: SolarSystemPlanet = None,
                  target_bodies: List[SolarSystemPlanet] = None,
                  start_time: Time = None,
-                 action_step: TimeDelta = TimeDelta(1 * u.hour),
-                 simulation_step: TimeDelta = TimeDelta(1 * u.minute),
+                 action_step: TimeDelta = TimeDelta(1 * u.minute),
+                 simulation_step: TimeDelta = TimeDelta(1 * u.second),
                  spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
@@ -265,7 +265,7 @@ class SolarSystem(gym.Env):
         ship_position, ship_velocity = self.spaceship.rv
         for x in range(0, n_iter):
             grav_acc = self._calculate_gravitational_acceleration()
-            dv, direction = self._calculate_engine_delta_v(action)
+            dv, direction = self._calculate_action_delta_v(action)
             dv_vector = dv * direction
             ship_position = self._update_position(ship_position, ship_velocity, grav_acc, dv_vector)
             ship_velocity = self._update_velocity(ship_velocity, grav_acc, dv_vector)
@@ -275,7 +275,7 @@ class SolarSystem(gym.Env):
             # update system ephem for new time_step
             # todo: get next 30min of ephem at once
 
-        pass
+            self.spaceship.rv = (ship_position, ship_velocity)
 
     def _update_position(self, position, velocity, grav_acc, delta_v):
         return position + (velocity + 0.5 * grav_acc * self.simulation_step + 0.5 * delta_v) * self.simulation_step
@@ -283,13 +283,13 @@ class SolarSystem(gym.Env):
     def _update_velocity(self, velocity, grav_acc, delta_v):
         return velocity + delta_v + grav_acc * self.simulation_step
 
-    def _calculate_engine_delta_v(self, action):
+    def _calculate_action_delta_v(self, action):
         direction, thrust_percent = action
         direction = direction / np.linalg.norm(direction)
         if thrust_percent != 0:
             thrust_time = self.simulation_step / thrust_percent
         else:
-            thrust_time = 0.
+            return # null dv & direction
         exhaust_velocity = self.spaceship.isp * g0
         mass_flow_rate = self.spaceship.thrust / exhaust_velocity
         delta_m = mass_flow_rate * thrust_time
@@ -321,13 +321,13 @@ class SolarSystem(gym.Env):
 
 class SpaceShip:
 
-    def __init__(self, *, initial_orbit, dry_mass, propellant_mass, isp, thrust):
-        self.initial_orbit = initial_orbit
+    def __init__(self, *, orbit, dry_mass, propellant_mass, isp, thrust):
+        self.orbit = orbit
         self.dry_mass = dry_mass
         self.propellant_mass = propellant_mass
         self.isp = isp
         self.thrust = thrust
-        self.rv = self.initial_orbit.rv()  # type: Tuple[Quantity, Quantity]
+        self.rv = self.orbit.rv()  # type: Tuple[Quantity, Quantity]
 
     @property
     def total_mass(self):
@@ -344,7 +344,7 @@ class SpaceShip:
         ships = {
             SpaceShipName.DEFAULT:
                 SpaceShip(
-                    initial_orbit=start_orbit,
+                    orbit=start_orbit,
                     dry_mass=2500 * u.kg,
                     propellant_mass=10000 * u.kg,
                     # propellant mass is significantly increased to compensate for third stage
@@ -354,7 +354,7 @@ class SpaceShip:
                 ),
             SpaceShipName.HIGH_THRUST:
                 SpaceShip(
-                    initial_orbit=start_orbit,
+                    orbit=start_orbit,
                     dry_mass=2500 * u.kg,
                     propellant_mass=10000 * u.kg,
                     isp=300 * u.s,
@@ -362,7 +362,7 @@ class SpaceShip:
                 ),
             SpaceShipName.LOW_THRUST:
                 SpaceShip(
-                    initial_orbit=start_orbit,
+                    orbit=start_orbit,
                     dry_mass=400 * u.kg,
                     propellant_mass=100 * u.kg,
                     isp=3000 * u.s,
