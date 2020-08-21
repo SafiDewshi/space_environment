@@ -13,6 +13,7 @@ from astropy.constants import G, g0
 from poliastro.bodies import Earth, Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, \
     SolarSystemPlanet
 from poliastro.ephem import Ephem
+from poliastro.maneuver import Maneuver
 import numpy as np
 from poliastro.frames import Planes
 from poliastro.twobody.orbit import Orbit
@@ -40,8 +41,8 @@ class SolarSystem(gym.Env):
                  start_body: SolarSystemPlanet = None,
                  target_bodies: List[SolarSystemPlanet] = None,
                  start_time: Time = None,
-                 action_step: TimeDelta = TimeDelta(1 * u.minute),
-                 simulation_step: TimeDelta = TimeDelta(1 * u.second),
+                 action_step: u.s = 3600*u.s,
+                 simulation_ratio: int = 60,
                  spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
@@ -65,8 +66,8 @@ class SolarSystem(gym.Env):
         self.spaceship_initial_altitude = spaceship_initial_altitude
         self.start_time = start_time
         self.current_time = None
-        self.time_step = action_step
-        self.simulation_step = simulation_step
+        self.action_step = action_step
+        self.simulation_ratio = simulation_ratio
         self.done = False
         self.reward = 0
         self.done = False
@@ -132,6 +133,10 @@ class SolarSystem(gym.Env):
             spaces.Box(low=0.0, high=1.0, shape=(1,))  # burn duration as percent of time_step
         ))
 
+    @property
+    def simulation_step(self):
+        return self.action_step + self.simulation_ratio
+
     def step(self, action):
         info = []
 
@@ -141,7 +146,9 @@ class SolarSystem(gym.Env):
         # todo: take input action in the form thrust direction, thrust time as percentage of time step
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
 
-        self._update_ship_dynamics(action)
+        dv = self._calculate_action_delta_v(action)
+        maneuvers = self._get_maneuver_list(dv)
+        self._apply_maneuvers(maneuvers)
 
         observation = self._get_observation()
 
@@ -215,7 +222,7 @@ class SolarSystem(gym.Env):
 
     def _get_observation(self):
         obs = [
-            self.time_step,
+            self.action_step,
             [self.spaceship.rv[0], self.spaceship.rv[1], self.spaceship.propellant_mass,
              self.spaceship.thrust]
         ]
@@ -234,9 +241,8 @@ class SolarSystem(gym.Env):
     def _record_current_state(self):
         # self.current_ephem
         # self.spaceship
-        # write relevant info to file?
+        # write timestamp & orbit
 
-        # todo: record planet & craft position history for later use/plotting
         return
 
     def _calculate_rewards(self):
@@ -256,40 +262,26 @@ class SolarSystem(gym.Env):
             self.done = True
         return
 
-    def _update_ship_dynamics(self, action):
-
-        # todo: update ship position in smaller time steps than self.timestep
-        #  since an orbit might take 90m but self.timestep defaults to 60m
-
-        n_iter = int(np.ceil((self.time_step / self.simulation_step).value))
-        ship_position, ship_velocity = self.spaceship.rv
-        for x in range(0, n_iter):
-            grav_acc = self._calculate_gravitational_acceleration()
-            dv, direction = self._calculate_action_delta_v(action)
-            dv_vector = dv * direction
-            ship_position = self._update_position(ship_position, ship_velocity, grav_acc, dv_vector)
-            ship_velocity = self._update_velocity(ship_velocity, grav_acc, dv_vector)
-            self.current_time += self.simulation_step
-            # increment time
-            self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
-            # update system ephem for new time_step
-            # todo: get next 30min of ephem at once
-
-            self.spaceship.rv = (ship_position, ship_velocity)
-
-    def _update_position(self, position, velocity, grav_acc, delta_v):
-        return position + (velocity + 0.5 * grav_acc * self.simulation_step + 0.5 * delta_v) * self.simulation_step
-
-    def _update_velocity(self, velocity, grav_acc, delta_v):
-        return velocity + delta_v + grav_acc * self.simulation_step
+    # def _update_ship_dynamics(self, action):
+    #
+    #     # todo: update ship position in smaller time steps than self.timestep
+    #     #  since an orbit might take 90m but self.timestep defaults to 60m
+    #
+    #     n_iter = int(np.ceil((self.action_step / self.simulation_step).value))
+    #
+    #     for x in range(0, n_iter):
+    #         dv, direction = self._calculate_action_delta_v(action)
+    #         dv_vector = dv * direction
+    #         self.current_time += self.simulation_step
+    #         # increment time
+    #         self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
+    #         # update system ephem for new time_step
+    #         # todo: get next 30min of ephem at once
 
     def _calculate_action_delta_v(self, action):
         direction, thrust_percent = action
         direction = direction / np.linalg.norm(direction)
-        if thrust_percent != 0:
-            thrust_time = self.simulation_step / thrust_percent
-        else:
-            return # null dv & direction
+        thrust_time = self.simulation_step * thrust_percent
         exhaust_velocity = self.spaceship.isp * g0
         mass_flow_rate = self.spaceship.thrust / exhaust_velocity
         delta_m = mass_flow_rate * thrust_time
@@ -298,25 +290,18 @@ class SolarSystem(gym.Env):
         delta_v = exhaust_velocity * np.log((mass_start / mass_final))
         self.spaceship.total_mass = mass_final
 
-        return delta_v, direction
+        return delta_v * direction
 
-    def _calculate_gravitational_acceleration(self):
-        # direction and strength of force
-        # F = Gm/r^2
-        acceleration = []
-        for body in self.current_ephem:
-            r_vector = body[1].rv()[0] - self.spaceship.rv[0]
-            r_magnitude = np.linalg.norm(r_vector)
+    def _get_maneuver_list(self, dv):
+        split_impulse = dv / self.simulation_ratio
+        impulse = []
+        for x in range(0, self.simulation_ratio):
+            impulse.append((self.simulation_step, split_impulse))
+        maneuvers = Maneuver(*impulse)
+        return maneuvers
 
-            a_magnitude = (G.to("km3/kg s2") * body[0].mass) / (r_magnitude ** 2)
-            a_vector = a_magnitude * r_vector / r_magnitude
-            acceleration.append(a_vector)
-
-        total_acceleration = 0
-        for a in acceleration:
-            total_acceleration += a
-
-        return total_acceleration
+    def _apply_maneuvers(self, maneuvers):
+        self.spaceship.orbit = self.spaceship.orbit.apply_maneuver(maneuvers)
 
 
 class SpaceShip:
@@ -339,7 +324,7 @@ class SpaceShip:
 
     @classmethod
     def get_default_ships(cls, ship_name: SpaceShipName, altitude, start_time, start_body):
-        start_orbit = SpaceShip.from_equatorial_circular_orbit(start_body, altitude, start_time)
+        start_orbit = Orbit.circular(start_body, alt=altitude, epoch=start_time)
 
         ships = {
             SpaceShipName.DEFAULT:
@@ -373,19 +358,22 @@ class SpaceShip:
 
         return ships.get(ship_name)
 
-    @classmethod
-    def from_start_orbit(cls, body, altitude, eccentricity, inclination, raan, argp, nu, epoch):
-        return Orbit.from_classical(body, altitude, eccentricity, inclination, raan, argp, nu, epoch)
+    # @classmethod
+    # def from_start_orbit(cls, body, altitude, eccentricity, inclination, raan, argp, nu, epoch):
+    #     return Orbit.from_classical(body, altitude, eccentricity, inclination, raan, argp, nu, epoch)
+    #
+    # @classmethod
+    # def from_equatorial_circular_orbit(cls, body, altitude, start_time):
+    #     return cls.from_start_orbit(
+    #         body,
+    #         altitude,
+    #         eccentricity=0 * u.one,
+    #         inclination=0 * u.deg,
+    #         raan=0 * u.deg,
+    #         argp=0 * u.deg,
+    #         nu=0 * u.deg,
+    #         epoch=start_time
+    #     )
 
-    @classmethod
-    def from_equatorial_circular_orbit(cls, body, altitude, start_time):
-        return cls.from_start_orbit(
-            body,
-            altitude,
-            eccentricity=0 * u.one,
-            inclination=0 * u.deg,
-            raan=0 * u.deg,
-            argp=0 * u.deg,
-            nu=0 * u.deg,
-            epoch=start_time
-        )
+    def propagate(self, *args, **kwargs):
+        return self.orbit.propagate(*args, **kwargs)
