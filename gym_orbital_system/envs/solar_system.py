@@ -17,6 +17,7 @@ from poliastro.maneuver import Maneuver
 import numpy as np
 from poliastro.frames import Planes
 from poliastro.twobody.orbit import Orbit
+from poliastro.threebody.soi import laplace_radius, get_mean_elements, hill_radius
 
 
 class SpaceShipName(Enum):
@@ -149,6 +150,7 @@ class SolarSystem(gym.Env):
         dv = self._calculate_action_delta_v(action)
         maneuvers = self._get_maneuver_list(dv)
         self._apply_maneuvers(maneuvers)
+        self._check_current_soi()
 
         observation = self._get_observation()
 
@@ -172,17 +174,11 @@ class SolarSystem(gym.Env):
 
         self.current_time = self.start_time
 
+        # get ephem
         self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
 
         # set up spacecraft
         self.spaceship = self._init_spaceship()
-
-        start_body_ephem = Ephem.from_body(self.start_body, self.start_time)
-        self.spaceship.rv = (
-            self.spaceship.rv[0] + start_body_ephem.rv()[0],
-            self.spaceship.rv[1] + start_body_ephem.rv()[1]
-        )
-        # convert spaceship rv to system-relative rather than earth
 
         observation = self._get_observation()
 
@@ -262,22 +258,6 @@ class SolarSystem(gym.Env):
             self.done = True
         return
 
-    # def _update_ship_dynamics(self, action):
-    #
-    #     # todo: update ship position in smaller time steps than self.timestep
-    #     #  since an orbit might take 90m but self.timestep defaults to 60m
-    #
-    #     n_iter = int(np.ceil((self.action_step / self.simulation_step).value))
-    #
-    #     for x in range(0, n_iter):
-    #         dv, direction = self._calculate_action_delta_v(action)
-    #         dv_vector = dv * direction
-    #         self.current_time += self.simulation_step
-    #         # increment time
-    #         self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
-    #         # update system ephem for new time_step
-    #         # todo: get next 30min of ephem at once
-
     def _calculate_action_delta_v(self, action):
         direction, thrust_percent = action
         direction = direction / np.linalg.norm(direction)
@@ -302,6 +282,11 @@ class SolarSystem(gym.Env):
 
     def _apply_maneuvers(self, maneuvers):
         self.spaceship.orbit = self.spaceship.orbit.apply_maneuver(maneuvers)
+
+    def _check_current_soi(self):
+
+        for planet in self.body_list:
+            planet.name
 
 
 class SpaceShip:
@@ -357,23 +342,6 @@ class SpaceShip:
         }
 
         return ships.get(ship_name)
-
-    # @classmethod
-    # def from_start_orbit(cls, body, altitude, eccentricity, inclination, raan, argp, nu, epoch):
-    #     return Orbit.from_classical(body, altitude, eccentricity, inclination, raan, argp, nu, epoch)
-    #
-    # @classmethod
-    # def from_equatorial_circular_orbit(cls, body, altitude, start_time):
-    #     return cls.from_start_orbit(
-    #         body,
-    #         altitude,
-    #         eccentricity=0 * u.one,
-    #         inclination=0 * u.deg,
-    #         raan=0 * u.deg,
-    #         argp=0 * u.deg,
-    #         nu=0 * u.deg,
-    #         epoch=start_time
-    #     )
 
     def propagate(self, *args, **kwargs):
         return self.orbit.propagate(*args, **kwargs)
