@@ -224,6 +224,7 @@ class SolarSystem(gym.Env):
         ]
         # todo: rework with units!
         # todo: reformat obs into np array, need better shape
+        # todo: use .to_icrs().rv()
         # [time_step, [craft position, velocity, fuel, engine power],
         # [body_1_is_target, body_1_position, body_1_velocity, body_1_mass],
         # ...
@@ -283,10 +284,23 @@ class SolarSystem(gym.Env):
     def _apply_maneuvers(self, maneuvers):
         self.spaceship.orbit = self.spaceship.orbit.apply_maneuver(maneuvers)
 
-    def _check_current_soi(self):
+    def _calculate_system_sois(self):
+        body_soi = {}
 
-        for planet in self.body_list:
-            planet.name
+        for body in self.body_list:
+            if body.name == "Sun":
+                pass
+            else:
+                try:
+                    soi_rad = hill_radius(body)
+
+                    body_soi[body.name] = soi_rad
+                except KeyError:
+                    pass
+                    # todo: calculate hill radius from mass
+
+    def _check_current_soi(self):
+        pass
 
 
 class SpaceShip:
