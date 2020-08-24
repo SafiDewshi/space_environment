@@ -29,7 +29,7 @@ class SpaceShipName(Enum):
 
 class SystemScope(Enum):
     EARTH = "Earth"
-    ALL = "All"
+    PLANETS = "Sun and Planets"
     # add more systems?
 
 
@@ -38,7 +38,7 @@ class SolarSystem(gym.Env):
 
     @u.quantity_input
     def __init__(self,
-                 bodies: SystemScope = SystemScope.ALL,
+                 bodies: SystemScope = SystemScope.PLANETS,
                  start_body: SolarSystemPlanet = None,
                  target_bodies: List[SolarSystemPlanet] = None,
                  start_time: Time = None,
@@ -85,8 +85,8 @@ class SolarSystem(gym.Env):
 
         body_dict = {
             SystemScope.EARTH: [Earth, Moon],
-            SystemScope.ALL:
-                [Sun, Earth, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto]
+            SystemScope.PLANETS:
+                [Sun, Earth, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune]
         }
         # define bodies to model
         # poliastro.bodies.SolarSystemPlanet =
@@ -98,33 +98,15 @@ class SolarSystem(gym.Env):
         except KeyError:
             raise KeyError(f"bodies must be one of {body_dict.keys()}")
 
+        self.hill_radii = self._calculate_system_sois()
+        self.current_soi = self.start_body.name
+
         # set up spacecraft
 
         self.spaceship = self._init_spaceship()
 
         self.current_ephem = None
 
-        # init:
-        # * which bodies are modelled
-        # * what time it is
-        # * what time_step to use
-        # * target body
-        # * spaceship pos/vel (orbit?) /fuel/thrust
-        # *
-
-        # init must define action & observation space
-        # initialize model solar system
-        #
-        # Define action and observation space
-        # They must be gym.spaces objects
-
-        # observation ~~time~~, time_step, craft position, craft velocity, craft fuel, craft engine power,
-        # bodies: position, velocity, mass
-
-        # [time_step, [craft position, velocity, fuel, engine power],
-        # [body_1_is_target, body_1_position, body_1_velocity, body_1_mass],
-        # ...
-        # [body_n_is_target, body_n_position, body_n_velocity, body_n_mass]]
         self.observation_space = spaces.Space()
 
         # action:
@@ -148,7 +130,7 @@ class SolarSystem(gym.Env):
         # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
 
         dv = self._calculate_action_delta_v(action)
-        maneuvers = self._get_maneuver_list(dv)
+        maneuvers = self._split_burn_to_impulse_list(dv)
         self._apply_maneuvers(maneuvers)
         self._check_current_soi()
 
@@ -273,7 +255,7 @@ class SolarSystem(gym.Env):
 
         return delta_v * direction
 
-    def _get_maneuver_list(self, dv):
+    def _split_burn_to_impulse_list(self, dv):
         split_impulse = dv / self.simulation_ratio
         impulse = []
         for x in range(0, self.simulation_ratio):
@@ -297,10 +279,29 @@ class SolarSystem(gym.Env):
                     body_soi[body.name] = soi_rad
                 except KeyError:
                     pass
-                    # todo: calculate hill radius from mass
+                    # mean_elements = get_mean_elements(body)
+                    # a = mean_elements.a  <- semimajor axis
+                    # ecc = mean_elements.ecc <- eccentricity
+                    #
+                    # mass_ratio = body.k / (3 * body.parent.k)
+                    # r_SOI = a * (1 - ecc) * (mass_ratio ** (1 / 3))
+                    # todo: calculate hill radius from mass ratio, and semimajor axis
+        return body_soi
 
     def _check_current_soi(self):
-        pass
+        if self.current_soi == Sun.name:
+            for body in self.body_list: # change self.body_list to self.current_ephem
+                if self.hill_radii[body.name] > np.linalg.norm(self.spaceship.orbit.r - body.r):
+
+                    # get distance between ship and body
+                    # check if that distance is less than hill radius
+                    # if so, update/remake orbit from vectors
+                    pass
+
+        else:
+            if np.linalg.norm(self.spaceship.orbit.r) > self.hill_radii[self.current_soi]:
+                self.current_soi = Sun.name
+                # edit spacecraft orbit to be sun-based by adding spaceship rv to planet rv
 
 
 class SpaceShip:
