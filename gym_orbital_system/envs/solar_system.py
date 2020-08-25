@@ -98,7 +98,7 @@ class SolarSystem(gym.Env):
         except KeyError:
             raise KeyError(f"bodies must be one of {body_dict.keys()}")
 
-        self.hill_radii = self._calculate_system_sois()
+        self.soi_radii = self._calculate_system_laplace_radii()
         self.current_soi = self.start_body.name
 
         # set up spacecraft
@@ -118,7 +118,7 @@ class SolarSystem(gym.Env):
 
     @property
     def simulation_step(self):
-        return self.action_step + self.simulation_ratio
+        return self.action_step / self.simulation_ratio
 
     def step(self, action):
         info = []
@@ -129,6 +129,8 @@ class SolarSystem(gym.Env):
         # split the delta v into impulses for each simulation step to smooth the impulse. returns list of impulses
         self._apply_maneuvers(maneuvers)
         # apply the impulses for maneuver, including propagating the orbit forwards to the end of that
+        self.current_time += self.action_step
+        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
         self._update_current_soi()
 
         observation = self._get_observation()
@@ -260,7 +262,7 @@ class SolarSystem(gym.Env):
     def _apply_maneuvers(self, maneuvers):
         self.spaceship.orbit = self.spaceship.orbit.apply_maneuver(maneuvers)
 
-    def _calculate_system_sois(self):
+    def _calculate_system_laplace_radii(self):
         body_soi = {}
 
         for body in self.body_list:
@@ -268,7 +270,7 @@ class SolarSystem(gym.Env):
                 pass
             else:
                 try:
-                    soi_rad = hill_radius(body)
+                    soi_rad = laplace_radius(body)
 
                     body_soi[body.name] = soi_rad
                 except KeyError:
@@ -285,7 +287,7 @@ class SolarSystem(gym.Env):
     def _update_current_soi(self):
         if self.current_soi == Sun.name:
             for body in self.current_ephem:
-                if self.hill_radii[body[0].name] > np.linalg.norm(self.spaceship.orbit.r - body[1].rv()[0]):
+                if self.soi_radii[body[0].name] > np.linalg.norm(self.spaceship.orbit.r - body[1].rv()[0]):
                     self.spaceship.orbit.change_attractor(body[0], force=True)
                     # get distance between ship and body
                     # check if that distance is less than hill radius
@@ -293,7 +295,7 @@ class SolarSystem(gym.Env):
                     pass
 
         else:
-            if np.linalg.norm(self.spaceship.orbit.r) > self.hill_radii[self.current_soi]:
+            if np.linalg.norm(self.spaceship.orbit.r) > self.soi_radii[self.current_soi]:
                 self.current_soi = Sun.name
                 self.spaceship.orbit.change_attractor(Sun, force=True)
                 # edit spacecraft orbit to be sun-based by adding spaceship rv to planet rv
