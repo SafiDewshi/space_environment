@@ -129,7 +129,7 @@ class SolarSystem(gym.Env):
         # split the delta v into impulses for each simulation step to smooth the impulse. returns list of impulses
         self._apply_maneuvers(maneuvers)
         # apply the impulses for maneuver, including propagating the orbit forwards to the end of that
-        self._check_current_soi()
+        self._update_current_soi()
 
         observation = self._get_observation()
 
@@ -137,10 +137,7 @@ class SolarSystem(gym.Env):
 
         # return new observation of craft rv, fuel levels, system positions
         # todo: calculate rewards? other info?
-        # to calculate rewards - check current position & velocity are within acceptable bounds of target?
-        # ^ doesn't work for multiple targets.
-        # check rewards over threshold?
-        # check all targets have been visited?
+        # give rewards for flying near other bodies, give big reward for reaching closed orbit around body
         self._calculate_rewards()
         # when target is visited to within desired thresholds, mark it as visited.
         # when all targets are done, set done = True
@@ -285,11 +282,11 @@ class SolarSystem(gym.Env):
                     # todo: calculate hill radius from mass ratio, and semimajor axis
         return body_soi
 
-    def _check_current_soi(self):
+    def _update_current_soi(self):
         if self.current_soi == Sun.name:
-            for body in self.body_list:  # change self.body_list to self.current_ephem
-                if self.hill_radii[body.name] > np.linalg.norm(self.spaceship.orbit.r - body.r):
-
+            for body in self.current_ephem:
+                if self.hill_radii[body[0].name] > np.linalg.norm(self.spaceship.orbit.r - body[1].rv()[0]):
+                    self.spaceship.orbit.change_attractor(body[0], force=True)
                     # get distance between ship and body
                     # check if that distance is less than hill radius
                     # if so, update/remake orbit from vectors
@@ -298,6 +295,7 @@ class SolarSystem(gym.Env):
         else:
             if np.linalg.norm(self.spaceship.orbit.r) > self.hill_radii[self.current_soi]:
                 self.current_soi = Sun.name
+                self.spaceship.orbit.change_attractor(Sun, force=True)
                 # edit spacecraft orbit to be sun-based by adding spaceship rv to planet rv
 
 
