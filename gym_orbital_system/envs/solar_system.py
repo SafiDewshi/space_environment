@@ -123,15 +123,12 @@ class SolarSystem(gym.Env):
     def step(self, action):
         info = []
 
-        # observation should be a list of bodies including their positions and speeds,
-        # as well as the spacecraft's position, speed, and fuel?
-
-        # todo: take input action in the form thrust direction, thrust time as percentage of time step
-        # todo: calculate effect of ship thrust and bodies gravity on ship's rv()
-
         dv = self._calculate_action_delta_v(action)
+        # take action in the form of a direction and burn time fraction, output total delta v
         maneuvers = self._split_burn_to_impulse_list(dv)
+        # split the delta v into impulses for each simulation step to smooth the impulse. returns list of impulses
         self._apply_maneuvers(maneuvers)
+        # apply the impulses for maneuver, including propagating the orbit forwards to the end of that
         self._check_current_soi()
 
         observation = self._get_observation()
@@ -290,7 +287,7 @@ class SolarSystem(gym.Env):
 
     def _check_current_soi(self):
         if self.current_soi == Sun.name:
-            for body in self.body_list: # change self.body_list to self.current_ephem
+            for body in self.body_list:  # change self.body_list to self.current_ephem
                 if self.hill_radii[body.name] > np.linalg.norm(self.spaceship.orbit.r - body.r):
 
                     # get distance between ship and body
