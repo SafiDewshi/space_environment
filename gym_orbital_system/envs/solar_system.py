@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 
 import gym
 import poliastro
@@ -42,7 +42,7 @@ class SolarSystem(gym.Env):
                  start_body: SolarSystemPlanet = None,
                  target_bodies: List[SolarSystemPlanet] = None,
                  start_time: Time = None,
-                 action_step: u.s = 3600*u.s,
+                 action_step: u.s = 3600 * u.s,
                  simulation_ratio: int = 60,
                  spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
                  spaceship_initial_altitude: u.km = 400 * u.km,
@@ -60,10 +60,14 @@ class SolarSystem(gym.Env):
         if start_time is None:
             start_time = Time(datetime.now()).tdb
 
-        # todo: enforce action_step/simulation_step is an integer?
+        # enforce action_step/simulation_step is an integer?
+        if action_step.value % simulation_ratio != 0:
+            raise ValueError("Action step must be evenly divisible by simulation_ratio")
 
         self.start_body = start_body
-        self.target_bodies = target_bodies
+        self.target_bodies = []
+        for target in target_bodies:
+            self.target_bodies.append(target.name)
         self.spaceship_initial_altitude = spaceship_initial_altitude
         self.start_time = start_time
         self.current_time = None
@@ -183,36 +187,48 @@ class SolarSystem(gym.Env):
         pass
 
     def close(self):
-        # todo: ?
         pass
 
     @staticmethod
-    def _get_ephem_from_list_of_bodies(bodies, current_time):
+    def _get_ephem_from_list_of_bodies(bodies, current_time) -> Dict[str, Tuple[SolarSystemPlanet, Ephem]]:
         list_of_bodies = {}
         for i in bodies:
             ephem = Ephem.from_body(i, current_time)
-            list_of_bodies[i.name] = ephem
+            list_of_bodies[i.name] = (i, ephem)
         return list_of_bodies
 
     def _get_observation(self):
 
-        obs = [
-            self.action_step,
-            [self.spaceship.rv[0], self.spaceship.rv[1], self.spaceship.propellant_mass,
-             self.spaceship.thrust]
+        obs = []
+        attractor_r, attractor_v = self.current_ephem[self.spaceship.orbit.attractor.name][1].rv()
+        ship_r = attractor_r.decompose().value + self.spaceship.orbit.r.decompose().value
+        ship_v = attractor_v.decompose().value + self.spaceship.orbit.v.decompose().value
+        ship_obs = [
+            self.action_step.decompose().value,
+            self.spaceship.thrust.decompose().value,
+            self.spaceship.isp.decompose().value,
+            self.spaceship.total_mass.decompose().value,
+            self.spaceship.dry_mass.decompose().value,
+            *ship_r[0],
+            *ship_v[0]
         ]
-        # todo: rework with units!
-        # todo: reformat obs into np array, need better shape
-        # todo: use .to_icrs().rv()
-        # [time_step, [craft position, velocity, fuel, engine power],
-        # [body_1_is_target, body_1_position, body_1_velocity, body_1_mass],
-        # ...
-        # [body_n_is_target, body_n_position, body_n_velocity, body_n_mass]]
-        for body in self.current_ephem:
-            obs.append(
-                [body[0] in self.target_bodies, body[0].mass, body[1].rv()[0], body[1].rv()[1]]
-            )
-        return obs
+        obs.append(ship_obs)
+
+        for i in self.current_ephem:
+            body_obs = []
+            body = self.current_ephem[i][0]
+            body_r, body_v = self.current_ephem[i][1].rv()
+            body_r = body_v.decompose().value
+            body_v = body_v.decompose().value
+            if i in self.target_bodies:
+                body_obs.append(True)
+            else:
+                body_obs.append(False)
+            body_obs += [body.k.decompose().value, body.R.decompose().value, *body_r[0], *body_v[0], 0, 0]
+            obs.append(body_obs)
+        np_obs = np.array(obs)
+        # todo: normalisation ;_;
+        return np_obs
 
     def _record_current_state(self):
         # self.current_ephem
