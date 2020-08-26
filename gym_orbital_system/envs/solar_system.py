@@ -188,13 +188,14 @@ class SolarSystem(gym.Env):
 
     @staticmethod
     def _get_ephem_from_list_of_bodies(bodies, current_time):
-        list_of_bodies = []
+        list_of_bodies = {}
         for i in bodies:
-            body = Ephem.from_body(i, current_time)
-            list_of_bodies.append([i, body])
+            ephem = Ephem.from_body(i, current_time)
+            list_of_bodies[i.name] = ephem
         return list_of_bodies
 
     def _get_observation(self):
+
         obs = [
             self.action_step,
             [self.spaceship.rv[0], self.spaceship.rv[1], self.spaceship.propellant_mass,
