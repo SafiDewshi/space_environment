@@ -203,6 +203,7 @@ class SolarSystem(gym.Env):
         attractor_r, attractor_v = self.current_ephem[self.spaceship.orbit.attractor.name][1].rv()
         ship_r = attractor_r.decompose().value + self.spaceship.orbit.r.decompose().value
         ship_v = attractor_v.decompose().value + self.spaceship.orbit.v.decompose().value
+        # todo: check the above works, ie does not change frame weirdly
         ship_obs = [
             self.action_step.decompose().value,
             self.spaceship.thrust.decompose().value,
@@ -228,6 +229,10 @@ class SolarSystem(gym.Env):
             obs.append(body_obs)
         np_obs = np.array(obs)
         # todo: normalisation ;_;
+        # body mass/radius -> divide by solar mass/radius
+        # body distance - find max body distance, hardcoded? speed find some measure for fastest planet?
+        # ship mass -> fraction of total mass
+        # ship thrust? isp?
         return np_obs
 
     def _record_current_state(self):
@@ -238,19 +243,31 @@ class SolarSystem(gym.Env):
         return
 
     def _calculate_rewards(self):
-        # todo: check if craft fulfils reward criteria - close/slow enough to a target body?
-        # if so increment reward and remove is_target boolean
-        # support for flybys? assign rewards for any flybys? careful if the system learns to just flyby one body?
-        # negative score for each time step to encourage reaching end.
+        # todo: check if craft is orbiting target body with eccentricity <1. give higher rewards for e closer to 0
+        #  and lower periapsis
+        #  then remove that body as target
+        #  if so increment reward and remove is_target boolean support for flybys? assign rewards
+        #  for any flybys. careful if the system learns to just flyby one body? negative score for each time step to
+        #  encourage reaching end.
+
+        # assign rewards for flybys for targets, check orbit parameters, more circular and lower orbits are rated
+        # better. store the past few steps and see if these parameters improve, then assign rewards for the best once
+        # things stop improving
+
+        current_soi = self.spaceship.orbit.attractor
+        current_ecc = self.spaceship.orbit.ecc
+        current_alt = self.spaceship.orbit.a
+
+        # !! after reward is assigned, remove that body from target list
 
         if True:
             self.reward += 1
         return
 
     def _check_if_done(self):
-        # todo: check if every target has been visited
+        # todo: check if no target_bodies exist
         # if done, adjust reward based off elapsed time and remaining fuel
-        if True:
+        if not self.target_bodies:
             self.done = True
         return
 
@@ -298,7 +315,8 @@ class SolarSystem(gym.Env):
                     #
                     # mass_ratio = body.k / (3 * body.parent.k)
                     # r_SOI = a * (1 - ecc) * (mass_ratio ** (1 / 3))
-                    # todo: calculate hill radius from mass ratio, and semimajor axis
+                    # todo: calculate hill radius from mass ratio and semimajor axis
+                    #  for bodies without get_mean_elements
         return body_soi
 
     def _update_current_soi(self):
@@ -306,6 +324,7 @@ class SolarSystem(gym.Env):
             for body in self.current_ephem:
                 if self.soi_radii[body[0].name] > np.linalg.norm(self.spaceship.orbit.r - body[1].rv()[0]):
                     self.spaceship.orbit.change_attractor(body[0], force=True)
+                    self.current_soi = body[0].name
                     # get distance between ship and body
                     # check if that distance is less than hill radius
                     # if so, update/remake orbit from vectors
