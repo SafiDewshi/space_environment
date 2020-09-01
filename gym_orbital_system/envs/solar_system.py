@@ -133,7 +133,7 @@ class SolarSystem(gym.Env):
         # split the delta v into impulses for each simulation step to smooth the impulse. returns list of impulses
         self._apply_maneuvers(maneuvers)
         # apply the impulses for maneuver, including propagating the orbit forwards to the end of that
-        self.current_time += self.action_step
+        self.current_time = self.spaceship.orbit.epoch
         self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
         self._update_current_soi()
 
@@ -144,6 +144,8 @@ class SolarSystem(gym.Env):
         # return new observation of craft rv, fuel levels, system positions
         # todo: calculate rewards? other info?
         # give rewards for flying near other bodies, give big reward for reaching closed orbit around body
+        
+        self._check_for_lithobraking()
         self._calculate_rewards()
         # when target is visited to within desired thresholds, mark it as visited.
         # when all targets are done, set done = True
@@ -256,7 +258,12 @@ class SolarSystem(gym.Env):
 
         current_soi = self.spaceship.orbit.attractor
         current_ecc = self.spaceship.orbit.ecc
-        current_alt = self.spaceship.orbit.a
+        current_pericenter = self.spaceship.orbit.r_p
+        current_apocenter = self.spaceship.orbit.r_a
+
+        # if attractor is not the sun, store attractor.
+
+        self._score_current_orbit()
 
         # !! after reward is assigned, remove that body from target list
 
@@ -269,6 +276,8 @@ class SolarSystem(gym.Env):
         # if done, adjust reward based off elapsed time and remaining fuel
         if not self.target_bodies:
             self.done = True
+            self.reward += 100
+            # (self.start_time - self.current_time)  add something to lightly incentivise finishing quickly?
         return
 
     def _calculate_action_delta_v(self, action):
@@ -335,6 +344,13 @@ class SolarSystem(gym.Env):
                 self.current_soi = Sun.name
                 self.spaceship.orbit.change_attractor(Sun, force=True)
                 # edit spacecraft orbit to be sun-based by adding spaceship rv to planet rv
+
+    def _score_current_orbit(self):
+        pass
+
+    def _check_for_lithobraking(self):
+
+        pass
 
 
 class SpaceShip:
