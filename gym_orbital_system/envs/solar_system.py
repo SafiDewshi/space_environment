@@ -3,14 +3,13 @@ from enum import Enum
 from typing import Tuple, List, Dict
 
 import gym
-import poliastro
 from astropy.units import Quantity
 from astropy.time import Time, TimeDelta
 from gym import spaces
 from astropy.coordinates import solar_system_ephemeris
 from astropy import time, units as u
-from astropy.constants import G, g0
-from poliastro.bodies import Earth, Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, \
+from astropy.constants import g0
+from poliastro.bodies import Earth, Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, \
     SolarSystemPlanet
 from poliastro.ephem import Ephem
 from poliastro.maneuver import Maneuver
@@ -58,6 +57,7 @@ class SolarSystem(gym.Env):
             start_body = Earth
         if target_bodies is None:
             target_bodies = [Mars]
+            # possible todo: specify whether to orbit or fly by planet?
         if start_time is None:
             start_time = Time(datetime.now()).tdb
 
@@ -105,9 +105,7 @@ class SolarSystem(gym.Env):
 
         self.soi_radii = self._calculate_system_laplace_radii()
         self.current_soi = self.start_body.name
-        self.visited_times = {}
-        for body in self.body_list:
-            self.visited_times[body.name] = Time(datetime.now()).tdb
+        self.visited_times = {self.start_body.name: Time(datetime.now()).tdb}
 
         # set up spacecraft
 
@@ -231,7 +229,7 @@ class SolarSystem(gym.Env):
                 body_obs.append(True)
             else:
                 body_obs.append(False)
-            body_obs += [body.k.decompose().value, body.R.decompose().value, *body_r[0], *body_v[0], 0, 0]
+            body_obs += [body.mass.decompose().value, body.R.decompose().value, *body_r[0], *body_v[0], 0, 0]
             obs.append(body_obs)
         np_obs = np.array(obs)
         # todo: normalisation ;_;
@@ -249,21 +247,15 @@ class SolarSystem(gym.Env):
         return
 
     def _calculate_rewards(self):
-        # todo: check if craft is orbiting target body with eccentricity <1. give higher rewards for e closer to 0
-        #  and lower periapsis
-        #  then remove that body as target
-        #  if so increment reward and remove is_target boolean support for flybys? assign rewards
-        #  for any flybys. careful if the system learns to just flyby one body? negative score for each time step to
-        #  encourage reaching end.
-
-        # assign rewards for flybys for targets, check orbit parameters, more circular and lower orbits are rated
-        # better. store the past few steps and see if these parameters improve, then assign rewards for the best once
-        # things stop improving
+        # assign rewards for entering a planet's SoI (~=flybys), check if the probe is in a low orbit around a target
 
         current_soi = self.spaceship.orbit.attractor
         current_ecc = self.spaceship.orbit.ecc
         current_pericenter = self.spaceship.orbit.r_p
         current_apocenter = self.spaceship.orbit.r_a
+
+        if self.current_soi != max(self.visited_times.items(), key=lambda x: x[1])[0]:
+            self.reward += 10
 
         if current_soi.name in self.target_bodies \
                 and current_ecc > 0.5 \
@@ -271,14 +263,8 @@ class SolarSystem(gym.Env):
                 and current_pericenter > current_soi.R:
             self.reward += 100
             self.target_bodies.remove(current_soi.name)
-        # if in orbit around a target.
+        # if in orbit around a target, assign reward and then remove current system as target
 
-        self._score_current_orbit()
-
-        # !! after reward is assigned, remove that body from target list
-
-        if True:
-            self.reward += 1
         return
 
     def _check_if_done(self):
@@ -287,7 +273,7 @@ class SolarSystem(gym.Env):
         if not self.target_bodies:
             self.done = True
             self.reward += 100
-            # (self.start_time - self.current_time)  add something to lightly incentivise finishing quickly?
+            # (self.start_time - self.current_time)  add something to provide incentive for finishing quickly?
         return
 
     def _calculate_action_delta_v(self, action):
@@ -340,15 +326,13 @@ class SolarSystem(gym.Env):
                 if self.soi_radii[body[0].name] > np.linalg.norm(self.spaceship.orbit.r - body[1].rv()[0]):
                     self.spaceship.orbit.change_attractor(body[0], force=True)
                     self.current_soi = body[0].name
+                    self.visited_times[body[0].name] = self.current_time
 
         else:
             if np.linalg.norm(self.spaceship.orbit.r) > self.soi_radii[self.current_soi]:
                 self.current_soi = Sun.name
                 self.spaceship.orbit.change_attractor(Sun, force=True)
                 # edit spacecraft orbit to be sun-based by adding spaceship rv to planet rv
-
-    def _score_current_orbit(self):
-        pass
 
     def _check_for_lithobraking(self):
         attractor_r = self.spaceship.orbit.attractor.R.to(u.km).value
