@@ -17,14 +17,15 @@ from poliastro.maneuver import Maneuver
 import numpy as np
 from poliastro.frames import Planes
 from poliastro.twobody.orbit import Orbit
-from poliastro.threebody.soi import laplace_radius, get_mean_elements, hill_radius
+from poliastro.threebody.soi import laplace_radius
+from poliastro.twobody.events import LithobrakeEvent
+from poliastro.twobody.propagation import propagate, cowell
 
 
 class SpaceShipName(Enum):
     DEFAULT = "default, approximately Cassini-Huygens with increased dV (4600) to compensate for lack of 3rd stage"
     LOW_THRUST = "low_thrust, approximately Deep Space 1 with ~6500 m/s dV"
     HIGH_THRUST = "high_thrust"
-    # todo: also add a blank ship?
 
 
 class SystemScope(Enum):
@@ -104,6 +105,9 @@ class SolarSystem(gym.Env):
 
         self.soi_radii = self._calculate_system_laplace_radii()
         self.current_soi = self.start_body.name
+        self.visited_times = {}
+        for body in self.body_list:
+            self.visited_times[body.name] = Time(datetime.now()).tdb
 
         # set up spacecraft
 
@@ -144,8 +148,8 @@ class SolarSystem(gym.Env):
         # return new observation of craft rv, fuel levels, system positions
         # todo: calculate rewards? other info?
         # give rewards for flying near other bodies, give big reward for reaching closed orbit around body
-        
-        self._check_for_lithobraking()
+        if self._check_for_lithobraking():
+            return observation, -100, True, info
         self._calculate_rewards()
         # when target is visited to within desired thresholds, mark it as visited.
         # when all targets are done, set done = True
@@ -261,7 +265,13 @@ class SolarSystem(gym.Env):
         current_pericenter = self.spaceship.orbit.r_p
         current_apocenter = self.spaceship.orbit.r_a
 
-        # if attractor is not the sun, store attractor.
+        if current_soi.name in self.target_bodies \
+                and current_ecc > 0.5 \
+                and current_apocenter < 1000 * u.km \
+                and current_pericenter > current_soi.R:
+            self.reward += 100
+            self.target_bodies.remove(current_soi.name)
+        # if in orbit around a target.
 
         self._score_current_orbit()
 
@@ -272,7 +282,7 @@ class SolarSystem(gym.Env):
         return
 
     def _check_if_done(self):
-        # todo: check if no target_bodies exist
+        # check if no target_bodies exist
         # if done, adjust reward based off elapsed time and remaining fuel
         if not self.target_bodies:
             self.done = True
@@ -318,14 +328,10 @@ class SolarSystem(gym.Env):
                     body_soi[body.name] = soi_rad
                 except KeyError:
                     pass
-                    # mean_elements = get_mean_elements(body)
-                    # a = mean_elements.a  <- semimajor axis
-                    # ecc = mean_elements.ecc <- eccentricity
-                    #
-                    # mass_ratio = body.k / (3 * body.parent.k)
-                    # r_SOI = a * (1 - ecc) * (mass_ratio ** (1 / 3))
-                    # todo: calculate hill radius from mass ratio and semimajor axis
-                    #  for bodies without get_mean_elements
+                    # a = get_mean_elements(body).a <- semimajor axis
+                    # r_SOI = a * (body.k / body.parent.k) ** (2 / 5)
+                    # todo: calculate laplace radius from mass ratio and semimajor axis
+                    #  for bodies where get_mean_elements fails
         return body_soi
 
     def _update_current_soi(self):
@@ -334,10 +340,6 @@ class SolarSystem(gym.Env):
                 if self.soi_radii[body[0].name] > np.linalg.norm(self.spaceship.orbit.r - body[1].rv()[0]):
                     self.spaceship.orbit.change_attractor(body[0], force=True)
                     self.current_soi = body[0].name
-                    # get distance between ship and body
-                    # check if that distance is less than hill radius
-                    # if so, update/remake orbit from vectors
-                    pass
 
         else:
             if np.linalg.norm(self.spaceship.orbit.r) > self.soi_radii[self.current_soi]:
@@ -349,8 +351,20 @@ class SolarSystem(gym.Env):
         pass
 
     def _check_for_lithobraking(self):
+        attractor_r = self.spaceship.orbit.attractor.R.to(u.km).value
+        if self.spaceship.orbit.r_p.to(u.km).value < attractor_r:
+            # if periapsis of orbit < diameter of orbit attractor
+            lithobrake_event = LithobrakeEvent(attractor_r)
+            events = [lithobrake_event]
+            # make a new lithobrake event with that radius
 
-        pass
+            # todo: propagate orbit forward by time_step and check for lithobrake event
+            # if lithobrake found, return true
+            lithobrake = False
+            if lithobrake:
+                return True
+
+        return False
 
 
 class SpaceShip:
