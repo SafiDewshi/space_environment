@@ -242,7 +242,7 @@ class SolarSystem(gym.Env):
     def _record_current_state(self):
         # self.current_ephem
         # self.spaceship
-        # write timestamp & orbits
+        # write timestamp, orbits, and action
 
         return
 
