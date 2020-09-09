@@ -76,7 +76,7 @@ class SolarSystem(gym.Env):
         self.simulation_ratio = simulation_ratio
         self.done = False
         self.reward = 0
-        self.done = False
+        self.initial_reset = False
 
         self.spaceship_name = spaceship_name
         self.spaceship_mass = spaceship_mass
@@ -113,7 +113,7 @@ class SolarSystem(gym.Env):
 
         self.current_ephem = None
 
-        self.observation_space = spaces.Space()
+        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(10, 11))
 
         # action:
         # tuple [[x,y,z], burn duration]
@@ -127,7 +127,11 @@ class SolarSystem(gym.Env):
         return self.action_step / self.simulation_ratio
 
     def step(self, action):
+
         info = []
+
+        if not self.initial_reset:
+            return self.reset(), self.reward, self.done, info
 
         dv = self._calculate_action_delta_v(action)
         # take action in the form of a direction and burn time fraction, output total delta v
@@ -167,6 +171,8 @@ class SolarSystem(gym.Env):
         self.spaceship = self._init_spaceship()
 
         observation = self._get_observation()
+
+        self.initial_reset = True
 
         return observation
 
