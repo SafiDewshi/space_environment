@@ -145,7 +145,7 @@ class SolarSystem(gym.Env):
 
         observation = self._get_observation()
 
-        self._record_current_state()
+        # self._record_current_state()
 
         # return new observation of craft rv, fuel levels, system positions
         # todo: calculate rewards? other info?
@@ -245,12 +245,12 @@ class SolarSystem(gym.Env):
         # ship thrust? isp?
         return np_obs
 
-    def _record_current_state(self):
-        # self.current_ephem
-        # self.spaceship
-        # write timestamp, orbits, and action
-
-        return
+    # def _record_current_state(self):
+    #     # self.current_ephem
+    #     # self.spaceship
+    #     # write timestamp, orbits, and action
+    #
+    #     return
 
     def _calculate_rewards(self):
         # assign rewards for entering a planet's SoI (~=flybys), check if the probe is in a low orbit around a target
@@ -331,11 +331,13 @@ class SolarSystem(gym.Env):
             for body in self.current_ephem:
                 if self.soi_radii[body[0].name] > np.linalg.norm(self.spaceship.orbit.r - body[1].rv()[0]):
                     self.spaceship.orbit.change_attractor(body[0], force=True)
+                    print(f"moving from {self.current_soi} to {body[0].name}")
                     self.current_soi = body[0].name
                     self.visited_times[body[0].name] = self.current_time
 
         else:
             if np.linalg.norm(self.spaceship.orbit.r) > self.soi_radii[self.current_soi]:
+                print(f"moving from {self.current_soi} to {Sun.name}")
                 self.current_soi = Sun.name
                 self.spaceship.orbit.change_attractor(Sun, force=True)
                 # edit spacecraft orbit to be sun-based by adding spaceship rv to planet rv
