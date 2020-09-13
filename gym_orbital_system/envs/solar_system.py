@@ -7,14 +7,13 @@ from astropy.units import Quantity
 from astropy.time import Time, TimeDelta
 from gym import spaces
 from astropy.coordinates import solar_system_ephemeris
-from astropy import time, units as u
+from astropy import units as u
 from astropy.constants import g0
 from poliastro.bodies import Earth, Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, \
     SolarSystemPlanet
 from poliastro.ephem import Ephem
 from poliastro.maneuver import Maneuver
 import numpy as np
-from poliastro.frames import Planes
 from poliastro.twobody.orbit import Orbit
 from poliastro.threebody.soi import laplace_radius
 from poliastro.twobody.events import LithobrakeEvent
@@ -22,7 +21,7 @@ from poliastro.twobody.propagation import propagate, cowell
 
 
 class SpaceShipName(Enum):
-    DEFAULT = "default, approximately Cassini-Huygens with increased dV (4600) to compensate for lack of 3rd stage"
+    CASSINI = "default, approximately Cassini-Huygens with increased dV (4600) to compensate for lack of 3rd stage"
     LOW_THRUST = "low_thrust, approximately Deep Space 1 with ~6500 m/s dV"
     HIGH_THRUST = "high_thrust"
 
@@ -44,7 +43,7 @@ class SolarSystem(gym.Env):
                  start_time: Time = None,
                  action_step: u.s = 3600 * u.s,
                  simulation_ratio: int = 60,
-                 spaceship_name: SpaceShipName = SpaceShipName.DEFAULT,
+                 spaceship_name: SpaceShipName = SpaceShipName.LOW_THRUST,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
                  spaceship_propellant_mass: u.kg = None,
@@ -52,6 +51,7 @@ class SolarSystem(gym.Env):
                  spaceship_engine_thrust: u.N = None
                  ):
         super(SolarSystem, self).__init__()
+
 
         if start_body is None:
             start_body = Earth
@@ -61,7 +61,7 @@ class SolarSystem(gym.Env):
         if start_time is None:
             start_time = Time(datetime.now()).tdb
 
-        # enforce action_step/simulation_step is an integer?
+        # enforce action_step/simulation_step is an integer
         if action_step.value % simulation_ratio != 0:
             raise ValueError("Action step must be evenly divisible by simulation_ratio")
 
@@ -77,6 +77,8 @@ class SolarSystem(gym.Env):
         self.done = False
         self.reward = 0
         self.initial_reset = False
+        self.r_normalization = None
+        self.v_normalization = None
 
         self.spaceship_name = spaceship_name
         self.spaceship_mass = spaceship_mass
@@ -148,7 +150,6 @@ class SolarSystem(gym.Env):
         # self._record_current_state()
 
         # return new observation of craft rv, fuel levels, system positions
-        # todo: calculate rewards? other info?
         # give rewards for flying near other bodies, give big reward for reaching closed orbit around body
         if self._check_for_lithobraking():
             return observation, -100, True, info
@@ -211,15 +212,13 @@ class SolarSystem(gym.Env):
 
         obs = []
         attractor_r, attractor_v = self.current_ephem[self.spaceship.orbit.attractor.name][1].rv()
-        ship_r = attractor_r.decompose().value + self.spaceship.orbit.r.decompose().value
-        ship_v = attractor_v.decompose().value + self.spaceship.orbit.v.decompose().value
+        ship_r = (attractor_r.decompose().value + self.spaceship.orbit.r.decompose().value)#/self.r_normalization
+        ship_v = (attractor_v.decompose().value + self.spaceship.orbit.v.decompose().value)#/self.v_normalization
         # todo: check the above works, ie does not change frame weirdly
         ship_obs = [
             self.action_step.decompose().value,
-            self.spaceship.thrust.decompose().value,
-            self.spaceship.isp.decompose().value,
-            self.spaceship.total_mass.decompose().value,
-            self.spaceship.dry_mass.decompose().value,
+            self.spaceship.total_mass.decompose().value / self.spaceship.initial_mass.decompose().value,
+            self.spaceship.dry_mass.decompose().value / self.spaceship.initial_mass.decompose().value,
             *ship_r[0],
             *ship_v[0]
         ]
@@ -229,20 +228,22 @@ class SolarSystem(gym.Env):
             body_obs = []
             body = self.current_ephem[i][0]
             body_r, body_v = self.current_ephem[i][1].rv()
-            body_r = body_v.decompose().value
+            body_r = body_r.decompose().value
             body_v = body_v.decompose().value
             if i in self.target_bodies:
                 body_obs.append(True)
             else:
                 body_obs.append(False)
-            body_obs += [body.mass.decompose().value, body.R.decompose().value, *body_r[0], *body_v[0], 0, 0]
+            body_obs += [
+                body.mass.decompose().value / Sun.mass.decompose().value,  # normalised by dividing by solar mass
+                body.R.decompose().value / Sun.R.decompose().value,  # normalised by dividing by solar radius
+                *body_r[0],
+                *body_v[0]
+            ]
             obs.append(body_obs)
         np_obs = np.array(obs)
-        # todo: normalisation ;_;
-        # body mass/radius -> divide by solar mass/radius
         # body distance - find max body distance, hardcoded? speed find some measure for fastest planet?
         # ship mass -> fraction of total mass
-        # ship thrust? isp?
         return np_obs
 
     # def _record_current_state(self):
@@ -368,6 +369,7 @@ class SpaceShip:
         self.isp = isp
         self.thrust = thrust
         self.rv = self.orbit.rv()  # type: Tuple[Quantity, Quantity]
+        self.initial_mass = dry_mass + propellant_mass
 
     @property
     def total_mass(self):
@@ -382,7 +384,7 @@ class SpaceShip:
         start_orbit = Orbit.circular(start_body, alt=altitude, epoch=start_time)
 
         ships = {
-            SpaceShipName.DEFAULT:
+            SpaceShipName.CASSINI:
                 SpaceShip(
                     orbit=start_orbit,
                     dry_mass=2500 * u.kg,
