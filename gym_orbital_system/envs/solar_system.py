@@ -52,7 +52,6 @@ class SolarSystem(gym.Env):
                  ):
         super(SolarSystem, self).__init__()
 
-
         if start_body is None:
             start_body = Earth
         if target_bodies is None:
@@ -77,8 +76,11 @@ class SolarSystem(gym.Env):
         self.done = False
         self.reward = 0
         self.initial_reset = False
-        self.r_normalization = None
-        self.v_normalization = None
+
+        self.r_normalization = 5e6 * u.km  # factor to divide position observations by to normalize them to +- 1.
+        # slightly more than neptune's orbit in km?
+        self.v_normalization = 100 * u.km/u.s  # factor to divide velocity observations by to normalize them to +- 1.
+        # approx 2x mercury's orbital velocity in km?
 
         self.spaceship_name = spaceship_name
         self.spaceship_mass = spaceship_mass
@@ -115,7 +117,7 @@ class SolarSystem(gym.Env):
 
         self.current_ephem = None
 
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(10, 11))
+        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(10, 9))
 
         # action:
         # tuple [[x,y,z], burn duration]
@@ -123,6 +125,7 @@ class SolarSystem(gym.Env):
             spaces.Box(low=-1.0, high=1.0, shape=(3,)),  # x,y,z direction vector
             spaces.Box(low=0.0, high=1.0, shape=(1,))  # burn duration as percent of time_step
         ))
+        # todo: reorder this to be all +- 1.0
 
     @property
     def simulation_step(self):
@@ -212,8 +215,12 @@ class SolarSystem(gym.Env):
 
         obs = []
         attractor_r, attractor_v = self.current_ephem[self.spaceship.orbit.attractor.name][1].rv()
-        ship_r = (attractor_r.decompose().value + self.spaceship.orbit.r.decompose().value)#/self.r_normalization
-        ship_v = (attractor_v.decompose().value + self.spaceship.orbit.v.decompose().value)#/self.v_normalization
+        ship_r = (
+                         attractor_r.decompose().value + self.spaceship.orbit.r.decompose().value
+                 ) / self.r_normalization.decompose().value
+        ship_v = (
+                         attractor_v.decompose().value + self.spaceship.orbit.v.decompose().value
+                 ) / self.v_normalization.decompose().value
         # todo: check the above works, ie does not change frame weirdly
         ship_obs = [
             self.action_step.decompose().value,
@@ -228,8 +235,8 @@ class SolarSystem(gym.Env):
             body_obs = []
             body = self.current_ephem[i][0]
             body_r, body_v = self.current_ephem[i][1].rv()
-            body_r = body_r.decompose().value
-            body_v = body_v.decompose().value
+            body_r = body_r.decompose().value / self.v_normalization.decompose().value
+            body_v = body_v.decompose().value / self.v_normalization.decompose().value
             if i in self.target_bodies:
                 body_obs.append(True)
             else:
