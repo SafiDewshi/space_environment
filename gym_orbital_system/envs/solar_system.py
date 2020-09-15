@@ -152,7 +152,7 @@ class SolarSystem(gym.Env):
 
         # return new observation of craft rv, fuel levels, system positions
         # give rewards for flying near other bodies, give big reward for reaching closed orbit around body
-        if self._check_for_lithobraking():
+        if self._check_planetary_proximity():
             return observation, -100, True, info
         self._calculate_rewards()
         # when target is visited to within desired thresholds, mark it as visited.
@@ -339,31 +339,31 @@ class SolarSystem(gym.Env):
             for body in self.current_ephem:
                 if self.soi_radii[body[0].name] > np.linalg.norm(self.spaceship.orbit.r - body[1].rv()[0]):
                     self.spaceship.orbit.change_attractor(body[0], force=True)
-                    print(f"moving from {self.current_soi} to {body[0].name}")
+                    # print(f"moving from {self.current_soi} to {body[0].name}")
                     self.current_soi = body[0].name
                     self.visited_times[body[0].name] = self.current_time
 
         else:
             if np.linalg.norm(self.spaceship.orbit.r) > self.soi_radii[self.current_soi]:
-                print(f"moving from {self.current_soi} to {Sun.name}")
+                # print(f"moving from {self.current_soi} to {Sun.name}")
                 self.current_soi = Sun.name
                 self.spaceship.orbit.change_attractor(Sun, force=True)
                 # edit spacecraft orbit to be sun-based by adding spaceship rv to planet rv
 
-    def _check_for_lithobraking(self):
+    def _check_planetary_proximity(self):
+        # if orbit r_p < attractor.R
+        # if orbit.a - abs(orbit.v) * time_steps < attractor.R
+        # collision possible
+
         attractor_r = self.spaceship.orbit.attractor.R.to(u.km).value
-        if self.spaceship.orbit.r_p.to(u.km).value < attractor_r:
-            # if periapsis of orbit < diameter of orbit attractor
-            lithobrake_event = LithobrakeEvent(attractor_r)
-            events = [lithobrake_event]
-            # make a new lithobrake event with that radius
+        orbit_periapsis = self.spaceship.orbit.r_p.to(u.km).value
 
-            # todo: propagate orbit forward by time_step and check for lithobrake event
-            # if lithobrake found, return true
-            lithobrake = False
-            if lithobrake:
+        if orbit_periapsis < attractor_r:
+            ship_altitude = self.spaceship.orbit.a.to(u.km).value
+            ship_distance_in_timestep = np.linalg.norm(self.spaceship.orbit.v) * self.action_step
+
+            if ship_altitude < ship_distance_in_timestep:
                 return True
-
         return False
 
 
