@@ -18,6 +18,7 @@ from poliastro.twobody.orbit import Orbit
 from poliastro.threebody.soi import laplace_radius
 from poliastro.twobody.events import LithobrakeEvent
 from poliastro.twobody.propagation import propagate, cowell
+from poliastro.util import time_range
 
 
 class SpaceShipName(Enum):
@@ -43,6 +44,7 @@ class SolarSystem(gym.Env):
                  start_time: Time = None,
                  action_step: u.s = 3600 * u.s,
                  simulation_ratio: int = 60,
+                 number_of_steps: int = 50000,
                  spaceship_name: SpaceShipName = SpaceShipName.LOW_THRUST,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
@@ -73,6 +75,7 @@ class SolarSystem(gym.Env):
         self.current_time = None
         self.action_step = action_step
         self.simulation_ratio = simulation_ratio
+        self.number_of_steps = number_of_steps
         self.done = False
         self.reward = 0
         self.initial_reset = False
@@ -115,15 +118,14 @@ class SolarSystem(gym.Env):
 
         self.spaceship = self._init_spaceship()
 
-        self.current_ephem = None
-
         self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(10, 9))
 
         # action:
         # tuple [[x,y,z], burn duration]
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(4,))  # x,y,z direction vector, burn duration as
         # percent of time_step
-        # todo: reorder this to be all +- 1.0
+        epochs = time_range(self.start_time, periods=self.number_of_steps, spacing=self.action_step)
+        self.ephems = self._get_ephem_from_list_of_bodies(self.body_list, epochs)
 
     @property
     def simulation_step(self):
@@ -143,7 +145,6 @@ class SolarSystem(gym.Env):
         self._apply_maneuvers(maneuvers)
         # apply the impulses for maneuver, including propagating the orbit forwards to the end of that
         self.current_time = self.spaceship.orbit.epoch
-        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.current_time)
         self._update_current_soi()
 
         observation = self._get_observation()
@@ -165,9 +166,6 @@ class SolarSystem(gym.Env):
         # get planet and spaceship positions at start_time, reset spaceship fuel,
 
         self.current_time = self.start_time
-
-        # get ephem
-        self.current_ephem = self._get_ephem_from_list_of_bodies(self.body_list, self.start_time)
 
         # set up spacecraft
         self.spaceship = self._init_spaceship()
@@ -202,17 +200,18 @@ class SolarSystem(gym.Env):
         pass
 
     @staticmethod
-    def _get_ephem_from_list_of_bodies(bodies, current_time) -> Dict[str, Tuple[SolarSystemPlanet, Ephem]]:
+    def _get_ephem_from_list_of_bodies(bodies, epochs) -> Dict[str, Tuple[SolarSystemPlanet, Ephem]]:
         list_of_bodies = {}
         for i in bodies:
-            ephem = Ephem.from_body(i, current_time)
+            ephem = Ephem.from_body(i, epochs)
             list_of_bodies[i.name] = (i, ephem)
         return list_of_bodies
 
     def _get_observation(self):
 
         obs = []
-        attractor_r, attractor_v = self.current_ephem[self.spaceship.orbit.attractor.name][1].rv()
+        attractor_r, attractor_v = \
+            self.ephems[self.spaceship.orbit.attractor.name][1].rv(epoch=self.current_time)
         ship_r = (
                          attractor_r.decompose().value + self.spaceship.orbit.r.decompose().value
                  ) / self.r_normalization.decompose().value
@@ -230,10 +229,10 @@ class SolarSystem(gym.Env):
         ]
         obs.append(ship_obs)
 
-        for i in self.current_ephem:
+        for i in self.ephems:
             body_obs = []
-            body = self.current_ephem[i][0]
-            body_r, body_v = self.current_ephem[i][1].rv()
+            body = self.ephems[i][0]
+            body_r, body_v = self.ephems[i][1].rv(epoch=self.current_time)
             body_r = body_r.decompose().value / self.r_normalization.decompose().value
             body_v = body_v.decompose().value / self.v_normalization.decompose().value
             if i in self.target_bodies:
@@ -336,8 +335,9 @@ class SolarSystem(gym.Env):
 
     def _update_current_soi(self):
         if self.current_soi == Sun.name:
-            for body in self.current_ephem:
-                if self.soi_radii[body[0].name] > np.linalg.norm(self.spaceship.orbit.r - body[1].rv()[0]):
+            for body in self.ephems:
+                if self.soi_radii[body[0].name] > \
+                        np.linalg.norm(self.spaceship.orbit.r - body[1].rv(epoch=self.current_time)[0]):
                     self.spaceship.orbit.change_attractor(body[0], force=True)
                     # print(f"moving from {self.current_soi} to {body[0].name}")
                     self.current_soi = body[0].name
