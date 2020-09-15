@@ -79,7 +79,7 @@ class SolarSystem(gym.Env):
 
         self.r_normalization = 5e9 * u.km  # factor to divide position observations by to normalize them to +- 1.
         # slightly more than neptune's orbit in km?
-        self.v_normalization = 100 * u.km/u.s  # factor to divide velocity observations by to normalize them to +- 1.
+        self.v_normalization = 100 * u.km / u.s  # factor to divide velocity observations by to normalize them to +- 1.
         # approx 2x mercury's orbital velocity in km?
 
         self.spaceship_name = spaceship_name
@@ -121,10 +121,8 @@ class SolarSystem(gym.Env):
 
         # action:
         # tuple [[x,y,z], burn duration]
-        self.action_space = spaces.Tuple((
-            spaces.Box(low=-1.0, high=1.0, shape=(3,)),  # x,y,z direction vector
-            spaces.Box(low=0.0, high=1.0, shape=(1,))  # burn duration as percent of time_step
-        ))
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(4,))  # x,y,z direction vector, burn duration as
+        # percent of time_step
         # todo: reorder this to be all +- 1.0
 
     @property
@@ -292,7 +290,8 @@ class SolarSystem(gym.Env):
         return
 
     def _calculate_action_delta_v(self, action):
-        direction, thrust_percent = action
+        *direction, thrust_percent = action
+        thrust_percent = (thrust_percent / 2) + 0.5
         direction = direction / np.linalg.norm(direction)
         thrust_time = self.simulation_step * thrust_percent
         exhaust_velocity = self.spaceship.isp * g0
