@@ -70,7 +70,7 @@ def train_eval(
         root_dir,
         env_name='gym_orbital_system:solarsystem-v0',
         num_iterations=2000000,
-        actor_fc_layers=(400, 300),
+        actor_fc_layers=(400, 300),  # todo: make this bigger?
         critic_obs_fc_layers=(400,),
         critic_action_fc_layers=None,
         critic_joint_fc_layers=(300,),

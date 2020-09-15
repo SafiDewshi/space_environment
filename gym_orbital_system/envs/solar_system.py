@@ -127,6 +127,8 @@ class SolarSystem(gym.Env):
         epochs = time_range(self.start_time, periods=self.number_of_steps, spacing=self.action_step)
         self.ephems = self._get_ephem_from_list_of_bodies(self.body_list, epochs)
 
+        self.finish_time = self.start_time + self.action_step * self.number_of_steps
+
     @property
     def simulation_step(self):
         return self.action_step / self.simulation_ratio
@@ -282,6 +284,9 @@ class SolarSystem(gym.Env):
     def _check_if_done(self):
         # check if no target_bodies exist
         # if done, adjust reward based off elapsed time and remaining fuel
+        if self.current_time > self.finish_time:
+            self.done = True
+            self.reward -= 10
         if not self.target_bodies:
             self.done = True
             self.reward += 100
