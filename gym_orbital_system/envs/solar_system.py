@@ -44,7 +44,7 @@ class SolarSystem(gym.Env):
                  start_time: Time = None,
                  action_step: u.s = 3600 * u.s,
                  simulation_ratio: int = 60,
-                 number_of_steps: int = 50000,
+                 number_of_steps: int = 10000,
                  spaceship_name: SpaceShipName = SpaceShipName.LOW_THRUST,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
@@ -365,9 +365,9 @@ class SolarSystem(gym.Env):
 
         if orbit_periapsis < attractor_r:
             ship_altitude = self.spaceship.orbit.a.to(u.km).value
-            ship_distance_in_timestep = (np.linalg.norm(self.spaceship.orbit.v) * self.action_step).to(u.km).value
+            ship_distance_travelled = (np.linalg.norm(self.spaceship.orbit.v) * self.action_step).to(u.km).value
 
-            if ship_altitude < ship_distance_in_timestep:
+            if ship_altitude < ship_distance_travelled:
                 return True
         return False
 
