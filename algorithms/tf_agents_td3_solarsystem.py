@@ -75,7 +75,7 @@ def train_eval(
         critic_action_fc_layers=None,
         critic_joint_fc_layers=(300,),
         # Params for collect
-        initial_collect_steps=10,
+        initial_collect_steps=1000,
         collect_steps_per_iteration=1,
         replay_buffer_capacity=100000,
         exploration_noise_std=0.1,
