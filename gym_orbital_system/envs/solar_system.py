@@ -365,7 +365,7 @@ class SolarSystem(gym.Env):
 
         if orbit_periapsis < attractor_r:
             ship_altitude = self.spaceship.orbit.a.to(u.km).value
-            ship_distance_in_timestep = np.linalg.norm(self.spaceship.orbit.v) * self.action_step
+            ship_distance_in_timestep = (np.linalg.norm(self.spaceship.orbit.v) * self.action_step).to(u.km).value
 
             if ship_altitude < ship_distance_in_timestep:
                 return True
