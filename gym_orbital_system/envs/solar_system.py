@@ -16,8 +16,6 @@ from poliastro.maneuver import Maneuver
 import numpy as np
 from poliastro.twobody.orbit import Orbit
 from poliastro.threebody.soi import laplace_radius
-from poliastro.twobody.events import LithobrakeEvent
-from poliastro.twobody.propagation import propagate, cowell
 from poliastro.util import time_range
 
 
