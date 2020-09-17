@@ -43,7 +43,7 @@ class SolarSystem(gym.Env):
                  target_bodies: List[SolarSystemPlanet] = None,
                  start_time: Time = None,
                  action_step: u.s = 3600 * u.s,
-                 simulation_ratio: int = 60,
+                 simulation_ratio: int = 6,
                  number_of_steps: int = 10000,
                  spaceship_name: SpaceShipName = SpaceShipName.LOW_THRUST,
                  spaceship_initial_altitude: u.km = 400 * u.km,
@@ -310,6 +310,7 @@ class SolarSystem(gym.Env):
 
     def _split_burn_to_impulse_list(self, dv):
         split_impulse = dv / self.simulation_ratio
+        # applying these maneuvers takes a long time; reduce simulation ratio?
         impulse = []
         for x in range(0, self.simulation_ratio):
             impulse.append((self.simulation_step, split_impulse))
