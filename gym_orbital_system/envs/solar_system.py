@@ -135,6 +135,7 @@ class SolarSystem(gym.Env):
 
         info = []
         self.reward = 0
+        self.done = False
 
         if not self.initial_reset:
             return self.reset(), self.reward, self.done, info
