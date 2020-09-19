@@ -69,15 +69,15 @@ FLAGS = flags.FLAGS
 def train_eval(
         root_dir,
         env_name='gym_orbital_system:solarsystem-v0',
-        num_iterations=20000000,
-        actor_fc_layers=(400, 1000, 1000, 400),
-        critic_obs_fc_layers=(400, 400,),
+        num_iterations=2000000,
+        actor_fc_layers=(400, 1000, 1000, 1000, 1000, 400),
+        critic_obs_fc_layers=(400, 1000, 1000, 400,),
         critic_action_fc_layers=None,
-        critic_joint_fc_layers=(300,),
+        critic_joint_fc_layers=(400,),
         # Params for collect
-        initial_collect_steps=10000,
+        initial_collect_steps=1000,
         collect_steps_per_iteration=1,
-        replay_buffer_capacity=1000000,
+        replay_buffer_capacity=100000,
         exploration_noise_std=0.1,
         # Params for target update
         target_update_tau=0.05,

@@ -134,6 +134,7 @@ class SolarSystem(gym.Env):
     def step(self, action):
 
         info = []
+        self.reward = 0
 
         if not self.initial_reset:
             return self.reset(), self.reward, self.done, info
@@ -268,6 +269,8 @@ class SolarSystem(gym.Env):
 
         if self.current_soi != max(self.visited_times.items(), key=lambda x: x[1])[0]:
             self.reward += 10
+        else:
+            self.reward -= 1
 
         if current_soi.name in self.target_bodies \
                 and current_ecc > 0.5 \
