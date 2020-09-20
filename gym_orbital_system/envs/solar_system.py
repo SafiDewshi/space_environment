@@ -275,9 +275,9 @@ class SolarSystem(gym.Env):
 
         if self.current_soi != max(self.visited_times.items(), key=lambda x: x[1])[0]:
             self.reward += 100
-        elif self.current_soi.name in self.target_bodies and current_ecc < previous_ecc:
+        elif current_soi.name in self.target_bodies and current_ecc < previous_ecc:
             self.reward += 5
-        elif self.current_soi.name not in self.target_bodies and previous_ecc < current_ecc:
+        elif current_soi.name not in self.target_bodies and previous_ecc < current_ecc:
             self.reward += 5
         else:
             self.reward -= 1
