@@ -43,7 +43,7 @@ class SolarSystem(gym.Env):
                  start_time: Time = None,
                  action_step: u.s = 3600 * u.s,
                  simulation_ratio: int = 6,
-                 number_of_steps: int = 10000,
+                 number_of_steps: int = 50000,
                  spaceship_name: SpaceShipName = SpaceShipName.LOW_THRUST,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
@@ -57,7 +57,6 @@ class SolarSystem(gym.Env):
             start_body = Earth
         if target_bodies is None:
             target_bodies = [Mars]
-            # possible todo: specify whether to orbit or fly by planet?
         if start_time is None:
             start_time = Time(datetime.now()).tdb
 
@@ -164,7 +163,9 @@ class SolarSystem(gym.Env):
         self._check_if_done()
 
         if self.done:
-            logging.info(f'Current_Soi = {self.current_soi}, time = {self.current_time}, reward = {self.reward}')
+            logging.info(
+                f"Current_Soi = {self.current_soi}, time = {self.current_time}, reward = {self.reward}, "
+                f"remaining fuel = {self.spaceship.total_mass / self.spaceship.initial_mass}")
 
         return observation, self.reward, self.done, info
 
