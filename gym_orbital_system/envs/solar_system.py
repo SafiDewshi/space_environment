@@ -160,9 +160,9 @@ class SolarSystem(gym.Env):
             self.reward -= 10000
             return observation, self.reward, True, info
         self._calculate_rewards()
-        # when target is visited to within desired thresholds, mark it as visited.
-        # when all targets are done, set done = True
+
         self._check_if_done()
+
         if self.done:
             logging.info(f'Current_Soi = {self.current_soi}, time = {self.current_time}, reward = {self.reward}')
 
@@ -269,11 +269,16 @@ class SolarSystem(gym.Env):
 
         current_soi = self.spaceship.orbit.attractor
         current_ecc = self.spaceship.orbit.ecc
+        previous_ecc = self.spaceship.previous_orbit.ecc
         current_pericenter = self.spaceship.orbit.r_p
         current_apocenter = self.spaceship.orbit.r_a
 
         if self.current_soi != max(self.visited_times.items(), key=lambda x: x[1])[0]:
             self.reward += 100
+        elif self.current_soi.name in self.target_bodies and current_ecc < previous_ecc:
+            self.reward += 5
+        elif self.current_soi.name not in self.target_bodies and previous_ecc < current_ecc:
+            self.reward += 5
         else:
             self.reward -= 1
 
@@ -324,6 +329,7 @@ class SolarSystem(gym.Env):
         return maneuvers
 
     def _apply_maneuvers(self, maneuvers):
+        self.spaceship.previous_orbit = self.spaceship.orbit
         self.spaceship.orbit = self.spaceship.orbit.apply_maneuver(maneuvers)
 
     def _calculate_system_laplace_radii(self):
@@ -363,9 +369,6 @@ class SolarSystem(gym.Env):
                 # edit spacecraft orbit to be sun-based by adding spaceship rv to planet rv
 
     def _check_planetary_proximity(self):
-        # if orbit r_p < attractor.R
-        # if orbit.a - abs(orbit.v) * time_steps < attractor.R
-        # collision possible
 
         attractor_r = self.spaceship.orbit.attractor.R.to(u.km).value
         orbit_periapsis = self.spaceship.orbit.r_p.to(u.km).value
@@ -383,6 +386,7 @@ class SpaceShip:
 
     def __init__(self, *, orbit, dry_mass, propellant_mass, isp, thrust):
         self.orbit = orbit
+        self.previous_orbit = orbit
         self.dry_mass = dry_mass
         self.propellant_mass = propellant_mass
         self.isp = isp
