@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Tuple, List, Dict
 
 import gym
+from absl import logging
 from astropy.units import Quantity
 from astropy.time import Time, TimeDelta
 from gym import spaces
@@ -156,11 +157,14 @@ class SolarSystem(gym.Env):
         # return new observation of craft rv, fuel levels, system positions
         # give rewards for flying near other bodies, give big reward for reaching closed orbit around body
         if self._check_planetary_proximity():
-            return observation, -100, True, info
+            self.reward -= 10000
+            return observation, self.reward, True, info
         self._calculate_rewards()
         # when target is visited to within desired thresholds, mark it as visited.
         # when all targets are done, set done = True
         self._check_if_done()
+        if self.done:
+            logging.info(f'Current_Soi = {self.current_soi}, time = {self.current_time}, reward = {self.reward}')
 
         return observation, self.reward, self.done, info
 
@@ -269,7 +273,7 @@ class SolarSystem(gym.Env):
         current_apocenter = self.spaceship.orbit.r_a
 
         if self.current_soi != max(self.visited_times.items(), key=lambda x: x[1])[0]:
-            self.reward += 10
+            self.reward += 100
         else:
             self.reward -= 1
 
@@ -277,7 +281,7 @@ class SolarSystem(gym.Env):
                 and current_ecc > 0.5 \
                 and current_apocenter < 1000 * u.km \
                 and current_pericenter > current_soi.R:
-            self.reward += 100
+            self.reward += 1000
             self.target_bodies.remove(current_soi.name)
         # if in orbit around a target, assign reward and then remove current system as target
 
