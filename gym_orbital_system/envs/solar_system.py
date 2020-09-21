@@ -277,9 +277,9 @@ class SolarSystem(gym.Env):
         if self.current_soi != max(self.visited_times.items(), key=lambda x: x[1])[0]:
             self.reward += 100
         elif current_soi.name in self.target_bodies and current_ecc < previous_ecc:
-            self.reward += 5
+            self.reward += 1
         elif current_soi.name not in self.target_bodies and previous_ecc < current_ecc:
-            self.reward += 5
+            self.reward += 1
         else:
             self.reward -= 1
 
@@ -287,7 +287,7 @@ class SolarSystem(gym.Env):
                 and current_ecc > 0.5 \
                 and current_apocenter < 1000 * u.km \
                 and current_pericenter > current_soi.R:
-            self.reward += 1000
+            self.reward += 10000
             self.target_bodies.remove(current_soi.name)
         # if in orbit around a target, assign reward and then remove current system as target
 
@@ -301,7 +301,7 @@ class SolarSystem(gym.Env):
             self.reward -= 10
         if not self.target_bodies:
             self.done = True
-            self.reward += 100
+            self.reward += 10000
             # (self.start_time - self.current_time)  add something to provide incentive for finishing quickly?
         return
 
@@ -315,6 +315,8 @@ class SolarSystem(gym.Env):
         delta_m = mass_flow_rate * thrust_time
         mass_start = self.spaceship.total_mass
         mass_final = mass_start - delta_m
+        if mass_final > self.spaceship.dry_mass:
+            mass_final = self.spaceship.dry_mass
         delta_v = exhaust_velocity * np.log((mass_start / mass_final))
         self.spaceship.total_mass = mass_final
 
