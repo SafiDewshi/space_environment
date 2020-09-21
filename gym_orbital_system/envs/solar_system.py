@@ -302,6 +302,9 @@ class SolarSystem(gym.Env):
         if not self.target_bodies:
             self.done = True
             self.reward += 10000
+        if self.spaceship.propellant_mass == 0:
+            self.done = True
+            self.reward -= 10
             # (self.start_time - self.current_time)  add something to provide incentive for finishing quickly?
         return
 
