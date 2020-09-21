@@ -44,7 +44,7 @@ class SolarSystem(gym.Env):
                  action_step: u.s = 3600 * u.s,
                  simulation_ratio: int = 6,
                  number_of_steps: int = 50000,
-                 spaceship_name: SpaceShipName = SpaceShipName.LOW_THRUST,
+                 spaceship_name: SpaceShipName = SpaceShipName.CASSINI,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
                  spaceship_propellant_mass: u.kg = None,
@@ -360,8 +360,8 @@ class SolarSystem(gym.Env):
     def _update_current_soi(self):
         if self.current_soi == Sun.name:
             for body in self.ephems:
-                if self.soi_radii[body[0].name] > \
-                        np.linalg.norm(self.spaceship.orbit.r - body[1].rv(epoch=self.current_time)[0]):
+                body_distance = np.linalg.norm(self.spaceship.orbit.r - body[1].rv(epoch=self.current_time)[0])
+                if self.soi_radii[body[0].name] > body_distance:
                     self.spaceship.orbit.change_attractor(body[0], force=True)
                     # print(f"moving from {self.current_soi} to {body[0].name}")
                     self.current_soi = body[0].name
