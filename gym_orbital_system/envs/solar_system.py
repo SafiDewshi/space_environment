@@ -3,9 +3,8 @@ from enum import Enum
 from typing import Tuple, List, Dict
 
 import gym
-from absl import logging
 from astropy.units import Quantity
-from astropy.time import Time, TimeDelta
+from astropy.time import Time
 from gym import spaces
 from astropy.coordinates import solar_system_ephemeris
 from astropy import units as u
@@ -29,7 +28,6 @@ class SpaceShipName(Enum):
 class SystemScope(Enum):
     EARTH = "Earth"
     PLANETS = "Sun and Planets"
-    JUPITER = "Jovian system"
     SATURN = "Saturnian system"
     # add more systems?
 
@@ -39,7 +37,7 @@ class SolarSystem(gym.Env):
 
     @u.quantity_input
     def __init__(self,
-                 bodies: SystemScope = SystemScope.PLANETS,
+                 bodies: SystemScope = SystemScope.SATURN,
                  start_body: SolarSystemPlanet = None,
                  target_bodies: List[SolarSystemPlanet] = None,
                  start_time: Time = None,
@@ -96,14 +94,29 @@ class SolarSystem(gym.Env):
         # Download & use JPL Ephem
 
         body_dict = {
-            SystemScope.EARTH: [Earth, Moon],
-            SystemScope.PLANETS:
-                [Sun, Earth, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune]
+            SystemScope.EARTH: {
+                "attractor": Earth,
+                "bodies": [Moon]
+            },
+            SystemScope.PLANETS: {
+                "attractor": Sun,
+                "bodies": [Earth, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune]
+            },
+            SystemScope.SATURN: {
+                "attractor": Saturn,
+                "bodies": [606, 605, 608, 604, 603, 602, 601],  # Titan, Rhea, Iapetus, Dione, Tethys, Enceladus, Mimas
+                "SPK": "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/sat427.bsp"
+            }
         }
-        # define bodies to model
-        # poliastro.bodies.SolarSystemPlanet =
-        #   Sun, Earth, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto
-        # could also add versions for: only inner solar system, only 'major' bodies jovan moons, saturn's moons?
+        bodies_dict = {
+            601: "mimas",
+            602: "enceladus",
+            603: "tethys",
+            604: "dione",
+            605: "rhea",
+            606: "titan",
+            608: "iapetus"
+        }
 
         try:
             self.body_list = body_dict[bodies]
