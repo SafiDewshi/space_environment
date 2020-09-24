@@ -1,7 +1,6 @@
 from datetime import datetime
 from enum import Enum
 from typing import Tuple, List, Dict
-from unittest import mock
 
 import gym
 from astropy.units import Quantity
@@ -18,6 +17,7 @@ import numpy as np
 from poliastro.twobody.orbit import Orbit
 from poliastro.threebody.soi import laplace_radius
 from poliastro.util import time_range, norm
+from astropy.coordinates import get_body_barycentric_posvel
 
 moon_dict = {
     601: {"body": Body(Saturn, (G * 4e19 * u.kg), "Mimas", R=396 * u.km), "orbital_radius": 185_537 * u.km,
@@ -239,6 +239,9 @@ class SolarSystem(gym.Env):
             ephem = Ephem.from_horizons(body, self.current_time,
                                         attractor=self.body_dict["attractor"], id_type="majorbody")
             self.ephems[body] = ephem
+        eph = get_body_barycentric_posvel([(6, 606)], self.current_time)
+        pos = eph[0].get_xyz()
+        vel = eph[1].get_xyz()
 
     def _get_observation(self):
 
@@ -249,8 +252,8 @@ class SolarSystem(gym.Env):
         ship_obs = [
             self.spaceship.total_mass.decompose().value / self.spaceship.initial_mass.decompose().value,
             self.spaceship.propellant_mass.decompose().value / self.spaceship.initial_mass.decompose().value,
-            *ship_r[0],
-            *ship_v[0],
+            *ship_r,
+            *ship_v,
         ]
         obs.append(ship_obs)
 
@@ -263,8 +266,8 @@ class SolarSystem(gym.Env):
             body_obs += [
                 body.mass.decompose().value / Sun.mass.decompose().value,  # normalised by dividing by solar mass
                 body.R.decompose().value / Sun.R.decompose().value,  # normalised by dividing by solar radius
-                *body_r[0],
-                *body_v[0]
+                *body_r,
+                *body_v
             ]
             obs.append(body_obs)
         np_obs = np.array(obs)
