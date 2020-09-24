@@ -23,12 +23,14 @@ from poliastro.util import time_range
 class SpaceShipName(Enum):
     CASSINI = "default, approximately Cassini-Huygens with increased dV (4600) to compensate for lack of 3rd stage"
     LOW_THRUST = "low_thrust, approximately Deep Space 1 with ~6500 m/s dV"
-    HIGH_THRUST = "high_thrust"
+    TEST_SHIP = "Test ship with high thrust fuel and isp"
 
 
 class SystemScope(Enum):
     EARTH = "Earth"
     PLANETS = "Sun and Planets"
+    JUPITER = "Jovian system"
+    SATURN = "Saturnian system"
     # add more systems?
 
 
@@ -42,9 +44,9 @@ class SolarSystem(gym.Env):
                  target_bodies: List[SolarSystemPlanet] = None,
                  start_time: Time = None,
                  action_step: u.s = 3600 * u.s,
-                 simulation_ratio: int = 6,
+                 simulation_ratio: int = 60,
                  number_of_steps: int = 50000,
-                 spaceship_name: SpaceShipName = SpaceShipName.CASSINI,
+                 spaceship_name: SpaceShipName = SpaceShipName.LOW_THRUST,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
                  spaceship_propellant_mass: u.kg = None,
@@ -162,10 +164,10 @@ class SolarSystem(gym.Env):
 
         self._check_if_done()
 
-        if self.done:
-            logging.info(
-                f"Current_Soi = {self.current_soi}, time = {self.current_time}, reward = {self.reward}, "
-                f"remaining fuel = {self.spaceship.total_mass / self.spaceship.initial_mass}")
+        # if self.done:
+        #     logging.info(
+        #         f"Current_Soi = {self.current_soi}, time = {self.current_time}, reward = {self.reward}, "
+        #         f"remaining fuel = {self.spaceship.total_mass / self.spaceship.initial_mass}")
 
         return observation, self.reward, self.done, info
 
@@ -423,13 +425,13 @@ class SpaceShip:
                     thrust=500 * u.N
                     # approx dV = 4600
                 ),
-            SpaceShipName.HIGH_THRUST:
+            SpaceShipName.TEST_SHIP:
                 SpaceShip(
                     orbit=start_orbit,
                     dry_mass=2500 * u.kg,
                     propellant_mass=10000 * u.kg,
-                    isp=300 * u.s,
-                    thrust=5000 * u.N
+                    isp=300000 * u.s,
+                    thrust=500 * u.N
                 ),
             SpaceShipName.LOW_THRUST:
                 SpaceShip(
