@@ -1,39 +1,34 @@
 from datetime import datetime
 from enum import Enum
-from typing import Tuple, List, Dict
 
 import gym
-from astropy.units import Quantity
 from astropy.time import Time
 from gym import spaces
-from astropy.coordinates import solar_system_ephemeris, CartesianRepresentation, ICRS
+from astropy.coordinates import solar_system_ephemeris
 from astropy import units as u
 from astropy.constants import g0, G
-from poliastro.bodies import Earth, Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, \
-    SolarSystemPlanet, Body
+from poliastro.bodies import Saturn, Body
 from poliastro.ephem import Ephem
 from poliastro.maneuver import Maneuver
 import numpy as np
 from poliastro.twobody.orbit import Orbit
-from poliastro.threebody.soi import laplace_radius
-from poliastro.util import time_range, norm
-from astropy.coordinates import get_body_barycentric_posvel
+from poliastro.util import norm
 
 moon_dict = {
     601: {"body": Body(Saturn, (G * 4e19 * u.kg), "Mimas", R=396 * u.km), "orbital_radius": 185_537 * u.km,
-          "soi": None},
+          "soi": None, "index": [(0, 6), (6, 601)]},
     602: {"body": Body(Saturn, (G * 1.1e20 * u.kg), "Enceladus", R=504 * u.km), "orbital_radius": 237_948 * u.km,
-          "soi": None},
+          "soi": None, "index": [(0, 6), (6, 602)]},
     603: {"body": Body(Saturn, (G * 6.2e20 * u.kg), "Tethys", R=1_062 * u.km), "orbital_radius": 294_619 * u.km,
-          "soi": None},
+          "soi": None, "index": [(0, 6), (6, 603)]},
     604: {"body": Body(Saturn, (G * 1.1e21 * u.kg), "Dione", R=1_123 * u.km), "orbital_radius": 377_396 * u.km,
-          "soi": None},
+          "soi": None, "index": [(0, 6), (6, 604)]},
     605: {"body": Body(Saturn, (G * 2.3e21 * u.kg), "Rhea", R=1_527 * u.km), "orbital_radius": 527_108 * u.km,
-          "soi": None},
+          "soi": None, "index": [(0, 6), (6, 605)]},
     606: {"body": Body(Saturn, (G * 1.35e23 * u.kg), "Titan", R=5_149 * u.km), "orbital_radius": 1_221_870 * u.km,
-          "soi": None},
+          "soi": None, "index": [(0, 6), (6, 606)]},
     608: {"body": Body(Saturn, (G * 1.8e21 * u.kg), "Iapetus", R=1_470 * u.km), "orbital_radius": 3_560_820 * u.km,
-          "soi": None}
+          "soi": None, "index": [(0, 6), (6, 608)]}
 }
 
 
@@ -47,6 +42,11 @@ class SystemScope(Enum):
     PLANETS = "Sun and Planets"
     SATURN = "Saturnian system"
     # add more systems?
+
+
+class DummyBody:
+    def __init__(self, name):
+        self.name = name
 
 
 class SolarSystem(gym.Env):
@@ -136,13 +136,15 @@ class SolarSystem(gym.Env):
 
         self._calculate_laplace_radii()
         self.current_soi = self.body_dict["attractor"].name
-        self.visited_times = {}
+        self.available_rewards_by_body = {}
+        for body in self.body_dict["bodies"]:
+            self.available_rewards_by_body[body] = 100
 
         # set up spacecraft
 
         self.spaceship = self._init_spaceship()
 
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(len(self.body_dict["bodies"]) + 2, 9))
+        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(len(self.body_dict["bodies"]) + 1, 8))
 
         # action:
         # tuple [[x,y,z], burn duration]
@@ -150,9 +152,9 @@ class SolarSystem(gym.Env):
         # percent of time_step
 
         self.r_normalization = 54.5e6 * u.km  # factor to divide position observations by to normalize them to +- 1.
-        # slightly more than neptune's orbit in km?
-        self.v_normalization = 100 * u.km / u.s  # factor to divide velocity observations by to normalize them to +- 1.
-        # approx 2x mercury's orbital velocity in km?
+        # Size of Saturn's laplace SOI
+        self.v_normalization = 71 * u.km / u.s  # factor to divide velocity observations by to normalize them to +- 1.
+        # 2xSaturn's escape velocity
 
         self.finish_time = self.start_time + self.action_step * self.number_of_steps
 
@@ -181,19 +183,7 @@ class SolarSystem(gym.Env):
 
         # self._record_current_state()
 
-        # return new observation of craft rv, fuel levels, system positions
-        # give rewards for flying near other bodies, give big reward for reaching closed orbit around body
-        if self._check_planetary_proximity():
-            self.reward -= 10000
-            return observation, self.reward, True, info
-        self._calculate_rewards()
-
-        self._check_if_done()
-
-        # if self.done:
-        #     logging.info(
-        #         f"Current_Soi = {self.current_soi}, time = {self.current_time}, reward = {self.reward}, "
-        #         f"remaining fuel = {self.spaceship.total_mass / self.spaceship.initial_mass}")
+        self._assign_all_rewards()
 
         return observation, self.reward, self.done, info
 
@@ -235,13 +225,10 @@ class SolarSystem(gym.Env):
         pass
 
     def _get_ephem(self):
-        for body in self.body_dict["bodies"]:
-            ephem = Ephem.from_horizons(body, self.current_time,
-                                        attractor=self.body_dict["attractor"], id_type="majorbody")
-            self.ephems[body] = ephem
-        eph = get_body_barycentric_posvel([(6, 606)], self.current_time)
-        pos = eph[0].get_xyz()
-        vel = eph[1].get_xyz()
+        for x in self.body_dict["bodies"]:
+            body = DummyBody(moon_dict[x]["index"])
+            ephem = Ephem.from_body(body, self.current_time, attractor=self.body_dict["attractor"])
+            self.ephems[x] = ephem
 
     def _get_observation(self):
 
@@ -258,16 +245,15 @@ class SolarSystem(gym.Env):
         obs.append(ship_obs)
 
         for i in self.ephems:
-            body_obs = []
             body = moon_dict[i]["body"]
             body_r, body_v = self.ephems[i].rv()
             body_r = body_r.decompose().value / self.r_normalization.decompose().value
             body_v = body_v.decompose().value / self.v_normalization.decompose().value
-            body_obs += [
-                body.mass.decompose().value / Sun.mass.decompose().value,  # normalised by dividing by solar mass
-                body.R.decompose().value / Sun.R.decompose().value,  # normalised by dividing by solar radius
-                *body_r,
-                *body_v
+            body_obs = [
+                body.mass.decompose().value / self.body_dict["attractor"].mass.decompose().value,
+                body.R.decompose().value / self.body_dict["attractor"].R.decompose().value,
+                *body_r[0],
+                *body_v[0]
             ]
             obs.append(body_obs)
         np_obs = np.array(obs)
@@ -280,49 +266,6 @@ class SolarSystem(gym.Env):
     #
     #     return
 
-    def _calculate_rewards(self):
-        # assign rewards for entering a planet's SoI (~=flybys), check if the probe is in a low orbit around a target
-
-        # current_soi = self.spaceship.orbit.attractor
-        # current_ecc = self.spaceship.orbit.ecc
-        # previous_ecc = self.spaceship.previous_orbit.ecc
-        # current_pericenter = self.spaceship.orbit.r_p
-        # current_apocenter = self.spaceship.orbit.r_a
-        #
-        # if self.current_soi != max(self.visited_times.items(), key=lambda x: x[1])[0]:
-        #     self.reward += 100
-        # elif current_soi.name in self.target_bodies and current_ecc < previous_ecc:
-        #     self.reward += 1
-        # elif current_soi.name not in self.target_bodies and previous_ecc < current_ecc:
-        #     self.reward += 1
-        # else:
-        #     self.reward -= 1
-        #
-        # if current_soi.name in self.target_bodies \
-        #         and current_ecc > 0.5 \
-        #         and current_apocenter < 1000 * u.km \
-        #         and current_pericenter > current_soi.R:
-        #     self.reward += 10000
-        #     self.target_bodies.remove(current_soi.name)
-        # if in orbit around a target, assign reward and then remove current system as target
-
-        return
-
-    def _check_if_done(self):
-        # check if no target_bodies exist
-        # if done, adjust reward based off elapsed time and remaining fuel
-        if self.current_time > self.finish_time:
-            self.done = True
-            self.reward -= 10
-        if not self.target_bodies:
-            self.done = True
-            self.reward += 10000
-        if self.spaceship.propellant_mass == 0:
-            self.done = True
-            self.reward -= 10
-            # (self.start_time - self.current_time)  add something to provide incentive for finishing quickly?
-        return
-
     def _calculate_action_delta_v(self, action):
         *direction, thrust_percent = action
         thrust_percent = (thrust_percent / 2) + 0.5
@@ -330,10 +273,10 @@ class SolarSystem(gym.Env):
         thrust_time = self.simulation_step * thrust_percent
         exhaust_velocity = self.spaceship.isp * g0
         mass_flow_rate = self.spaceship.thrust / exhaust_velocity
-        delta_m = mass_flow_rate * thrust_time
+        delta_m = (mass_flow_rate * thrust_time).decompose()
         mass_start = self.spaceship.total_mass
         mass_final = mass_start - delta_m
-        if mass_final > self.spaceship.dry_mass:
+        if mass_final < self.spaceship.dry_mass:
             mass_final = self.spaceship.dry_mass
         delta_v = exhaust_velocity * np.log((mass_start / mass_final))
         self.spaceship.total_mass = mass_final
@@ -360,27 +303,6 @@ class SolarSystem(gym.Env):
             r_soi = a * (body.k / body.parent.k) ** (2 / 5)
             moon_dict[i]["soi"] = r_soi
 
-    # def _update_current_soi(self):
-    #     if self.current_soi == self.body_dict["attractor"].name:
-    #         for body in self.body_dict["bodies"]:
-    #             body_r = ICRS(self.ephems[body].rv()[0])\
-    #                 .transform_to(self.spaceship.orbit.get_frame())\
-    #                 .represent_as(CartesianRepresentation)\
-    #                 .xyz
-    #             distance = norm(self.spaceship.orbit.r - body_r)
-    #             if distance < moon_dict[body]["soi"]:
-    #                 self._change_attractor(body)
-    #                 break
-    #     else:
-    #         if self.spaceship.orbit.r > moon_dict[self.current_soi]:
-    #             self._change_attractor(self.body_dict["attractor"].name)
-    #
-    # def _change_attractor(self, body):
-    #     if body == self.body_dict["attractor"].name:
-    #         pass
-    #     else:
-    #         pass
-
     def _check_planetary_proximity(self):
 
         attractor_r = self.spaceship.orbit.attractor.R.to(u.km).value
@@ -394,6 +316,49 @@ class SolarSystem(gym.Env):
                 return True
         return False
 
+    def _assign_all_rewards(self):
+        self._calculate_proximity_rewards()
+        self._check_remaining_rewards()
+
+    def _calculate_proximity_rewards(self):
+        ship_location = self.spaceship.orbit.r.to(u.km)
+        for body in self.body_dict["bodies"]:
+            body_location = self.ephems[body].rv()[0].to(u.km)
+            ship_proximity = norm(ship_location-body_location)
+            soi = moon_dict[body]["soi"]
+            if ship_proximity > soi:
+                continue
+                # ship not close enough to body to receive rewards
+            elif ship_proximity < moon_dict[body]["body"].R:
+                self.done = True
+                self.reward -= 100
+                # ship crashed into body
+            else:
+                target_percent = 0.2
+                target_distance = target_percent * soi
+                reward_multiplier = 50
+                if ship_proximity <= target_distance:
+                    reward = (ship_proximity/target_distance)*reward_multiplier
+                    if self.available_rewards_by_body[body] > reward:
+                        self.reward += reward
+                        self.available_rewards_by_body[body] -= reward
+                    else:
+                        self.reward += self.available_rewards_by_body[body]
+                        self.available_rewards_by_body[body] = 0   
+                # Assign reward scaled for how close the ship is to a target proximity (as a fraction of its SoI)
+
+    def _check_remaining_rewards(self):
+        remaining_fuel_fraction = self.spaceship.propellant_mass / self.spaceship.initial_propellant
+        if self.current_time > self.finish_time:
+            self.done = True
+            self.reward -= 10
+        elif remaining_fuel_fraction < 0:
+            self.done = True
+            self.reward -= 10
+        elif sum(self.available_rewards_by_body.values()) == 0:
+            self.done = True
+            self.reward += 100*remaining_fuel_fraction
+
 
 class SpaceShip:
 
@@ -405,6 +370,7 @@ class SpaceShip:
         self.isp = isp
         self.thrust = thrust
         self.initial_mass = dry_mass + propellant_mass
+        self.initial_propellant = propellant_mass
 
     @property
     def total_mass(self):
