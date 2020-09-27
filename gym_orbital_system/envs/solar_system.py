@@ -348,10 +348,11 @@ class SolarSystem(gym.Env):
                         self.reward += self.available_rewards_by_body[body]
                         self.available_rewards_by_body[body] = 0
                 # Assign reward scaled for how close the ship is to a target proximity (as a fraction of its SoI)
-            if self.last_step_ship_proximity[body] is not None:
-                if self.last_step_ship_proximity[body] < ship_proximity:
-                    self.reward += 0.1
-            self.last_step_ship_proximity[body] = ship_proximity
+            if self.available_rewards_by_body[body] > 0:
+                if self.last_step_ship_proximity[body] is not None:
+                    if self.last_step_ship_proximity[body] < ship_proximity:
+                        self.reward += 0.1
+                self.last_step_ship_proximity[body] = ship_proximity
 
     def _check_remaining_rewards(self):
         remaining_fuel_fraction = self.spaceship.propellant_mass / self.spaceship.initial_propellant
