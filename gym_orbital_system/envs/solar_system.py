@@ -68,6 +68,7 @@ class SolarSystem(gym.Env):
                  ):
         super(SolarSystem, self).__init__()
 
+        self.last_step_ship_proximity = {}
         if start_time is None:
             start_time = Time(datetime.now()).tdb
 
@@ -184,13 +185,13 @@ class SolarSystem(gym.Env):
         # self._record_current_state()
 
         self._assign_all_rewards()
-        self.reward = int(self.reward)
 
         return observation, self.reward, self.done, info
 
     def reset(self):
         # get planet and spaceship positions at start_time, reset spaceship fuel,
-
+        for body in self.body_dict["bodies"]:
+            self.last_step_ship_proximity[body] = None
         self.current_time = self.start_time
 
         # set up spacecraft
@@ -345,12 +346,19 @@ class SolarSystem(gym.Env):
                         self.available_rewards_by_body[body] -= reward
                     else:
                         self.reward += self.available_rewards_by_body[body]
-                        self.available_rewards_by_body[body] = 0   
+                        self.available_rewards_by_body[body] = 0
                 # Assign reward scaled for how close the ship is to a target proximity (as a fraction of its SoI)
+            if self.last_step_ship_proximity[body] is not None:
+                if self.last_step_ship_proximity[body] < ship_proximity:
+                    self.reward += 0.1
+            self.last_step_ship_proximity[body] = ship_proximity
 
     def _check_remaining_rewards(self):
         remaining_fuel_fraction = self.spaceship.propellant_mass / self.spaceship.initial_propellant
-        if self.current_time > self.finish_time:
+        if self.spaceship.orbit.a < self.body_dict["attractor"].R:
+            self.done = True
+            self.reward -= 100
+        elif self.current_time > self.finish_time:
             self.done = True
             self.reward -= 10
         elif remaining_fuel_fraction < 0:
@@ -359,7 +367,6 @@ class SolarSystem(gym.Env):
         elif sum(self.available_rewards_by_body.values()) == 0:
             self.done = True
             self.reward += 100*remaining_fuel_fraction
-# todo: also check for saturn proximity
 
 
 class SpaceShip:
