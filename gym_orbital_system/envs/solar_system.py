@@ -147,7 +147,7 @@ class SolarSystem(gym.Env):
         self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(len(self.body_dict["bodies"]) + 1, 8))
 
         # action:
-        # tuple [[x,y,z], burn duration]
+        # [x,y,z, burn duration]
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(4,))  # x,y,z direction vector, burn duration as
         # percent of time_step
 
@@ -184,6 +184,7 @@ class SolarSystem(gym.Env):
         # self._record_current_state()
 
         self._assign_all_rewards()
+        self.reward = int(self.reward)
 
         return observation, self.reward, self.done, info
 
