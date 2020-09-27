@@ -57,8 +57,8 @@ class SolarSystem(gym.Env):
                  bodies: SystemScope = SystemScope.SATURN,
                  start_time: Time = None,
                  action_step: u.s = 3600 * u.s,
-                 simulation_ratio: int = 60,
-                 number_of_steps: int = 50000,
+                 simulation_ratio: int = 6,
+                 number_of_steps: int = 10000,
                  spaceship_name: SpaceShipName = SpaceShipName.TEST_SHIP,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_mass: u.kg = None,
@@ -358,6 +358,7 @@ class SolarSystem(gym.Env):
         elif sum(self.available_rewards_by_body.values()) == 0:
             self.done = True
             self.reward += 100*remaining_fuel_fraction
+# todo: also check for saturn proximity
 
 
 class SpaceShip:
