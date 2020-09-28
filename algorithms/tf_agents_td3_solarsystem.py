@@ -100,7 +100,7 @@ def train_eval(
         log_interval=1000,
         summary_interval=1000,
         summaries_flush_secs=10,
-        debug_summaries=False,
+        debug_summaries=True,
         summarize_grads_and_vars=False,
         eval_metrics_callback=None):
     """A simple train and eval for TD3."""
