@@ -296,7 +296,7 @@ class SolarSystem(gym.Env):
 
     def _apply_maneuvers(self, maneuvers):
         self.spaceship.previous_orbit = self.spaceship.orbit
-        self.spaceship.orbit = self.spaceship.orbit.apply_maneuver(maneuvers)
+        self.spaceship.orbit = self.spaceship.orbit.apply_maneuver(maneuvers).propagate(self.simulation_step)
 
     def _calculate_laplace_radii(self):
         for i in self.body_dict["bodies"]:
