@@ -189,6 +189,7 @@ class SolarSystem(gym.Env):
         return observation, self.reward, self.done, info
 
     def reset(self):
+        self.done = False
         # get planet and spaceship positions at start_time, reset spaceship fuel,
         for body in self.body_dict["bodies"]:
             self.last_step_ship_proximity[body] = None
