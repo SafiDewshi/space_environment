@@ -57,7 +57,7 @@ from tf_agents.utils import common
 
 flags.DEFINE_string('root_dir', os.getenv('TEST_UNDECLARED_OUTPUTS_DIR'),
                     'Root directory for writing logs/summaries/checkpoints.')
-flags.DEFINE_integer('num_iterations', 100000,
+flags.DEFINE_integer('num_iterations', 500000,
                      'Total number train/eval iterations to perform.')
 flags.DEFINE_multi_string('gin_file', None, 'Paths to the gin-config files.')
 flags.DEFINE_multi_string('gin_param', None, 'Gin binding parameters.')
@@ -69,7 +69,7 @@ FLAGS = flags.FLAGS
 def train_eval(
         root_dir,
         env_name='gym_orbital_system:solarsystem-v0',
-        num_iterations=2000000,
+        num_iterations=500000,
         actor_fc_layers=(400, 1000, 1000, 1000, 1000, 400),
         critic_obs_fc_layers=(400, 1000, 1000, 400,),
         critic_action_fc_layers=None,
