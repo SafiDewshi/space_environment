@@ -96,7 +96,7 @@ class EarthSystem(gym.Env):
 
         self.spaceship = self._init_spaceship()
 
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(1, 8))
+        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(8,))
 
         # action:
         # [x,y,z, burn duration]
