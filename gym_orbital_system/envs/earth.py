@@ -47,7 +47,7 @@ class EarthSystem(gym.Env):
                  spaceship_isp: u.s = None,
                  spaceship_engine_thrust: u.N = None
                  ):
-        super(SolarSystem, self).__init__()
+        super(EarthSystem, self).__init__()
 
         self.last_step_ship_proximity = {}
         if start_time is None:
