@@ -142,6 +142,7 @@ class EarthSystem(gym.Env):
         self.done = False
         # get planet and spaceship positions at start_time, reset spaceship fuel,
         self.current_time = self.start_time
+        self.reward = 0
 
         # set up spacecraft
         self.spaceship = self._init_spaceship()
@@ -272,7 +273,7 @@ class EarthSystem(gym.Env):
         elif abs(self.spaceship_target_altitude - self.spaceship.orbit.a) < 10 * u.km \
                 and self.spaceship.orbit.ecc < 0.05:
             self.done = True
-            self.reward += 1000*remaining_fuel_fraction
+            self.reward += 10000*remaining_fuel_fraction
 
 
 class SpaceShip:
