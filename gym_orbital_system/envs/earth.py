@@ -39,7 +39,7 @@ class EarthSystem(gym.Env):
                  action_step: u.s = 60 * u.s,
                  simulation_ratio: int = 1,
                  number_of_steps: int = 50000,
-                 spaceship_name: SpaceShipName = SpaceShipName.LOW_THRUST,
+                 spaceship_name: SpaceShipName = SpaceShipName.TEST_SHIP,
                  spaceship_initial_altitude: u.km = 400 * u.km,
                  spaceship_target_altitude: u.km = 35_786 * u.km,  # geostationary
                  spaceship_mass: u.kg = None,
