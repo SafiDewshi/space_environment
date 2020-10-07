@@ -115,8 +115,8 @@ def train_eval(
         eval_metrics_callback=None):
     """A simple train and eval for SAC."""
     root_dir = os.path.expanduser(root_dir)
-    train_dir = os.path.join(root_dir, 'train')
-    eval_dir = os.path.join(root_dir, 'eval')
+    train_dir = os.path.join(root_dir, 'td3_eval/train')
+    eval_dir = os.path.join(root_dir, 'td3_eval/eval')
 
     train_summary_writer = tf.compat.v2.summary.create_file_writer(
         train_dir, flush_millis=summaries_flush_secs * 1000)
