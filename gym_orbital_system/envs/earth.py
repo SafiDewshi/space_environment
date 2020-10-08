@@ -227,18 +227,6 @@ class EarthSystem(gym.Env):
         self.spaceship.previous_orbit = self.spaceship.orbit
         self.spaceship.orbit = self.spaceship.orbit.apply_maneuver(maneuvers).propagate(self.simulation_step)
 
-    def _check_planetary_proximity(self):
-
-        attractor_r = self.spaceship.orbit.attractor.R.to(u.km).value
-        orbit_periapsis = self.spaceship.orbit.r_p.to(u.km).value
-
-        if orbit_periapsis < attractor_r:
-            ship_altitude = self.spaceship.orbit.a.to(u.km).value
-            ship_distance_travelled = (np.linalg.norm(self.spaceship.orbit.v) * self.action_step).to(u.km).value
-
-            if ship_altitude < ship_distance_travelled:
-                return True
-        return False
 
     def _assign_all_rewards(self):
         self._calculate_proximity_rewards()
