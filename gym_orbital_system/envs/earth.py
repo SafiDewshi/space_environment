@@ -254,9 +254,11 @@ class EarthSystem(gym.Env):
         prev_apo_diff = abs(target - apo_prev)
         current_peri_diff = abs(target - peri_current)
         prev_peri_diff = abs(target - peri_prev)
-        self.reward += 0.05 * (current_apo_diff - prev_apo_diff).value
+        if current_apo_diff < prev_apo_diff:
+            self.reward += 0.5 * (current_apo_diff - prev_apo_diff).value
         # reward proportional to the amount the orbit's furthest point has approached target
-        self.reward += 0.01 * (current_peri_diff - prev_peri_diff).value
+        if current_peri_diff < prev_peri_diff:
+            self.reward += 0.1 * (current_peri_diff - prev_peri_diff).value
         # reward proportional to the amount the orbit's nearest point has approached target
 
     def _check_remaining_rewards(self):
